@@ -8,6 +8,7 @@ on:
     paths:
       - "server/**"
       - "shared/**"
+      - "tests/**"
       - "wrangler.jsonc"
       - "package.json"
       - "pnpm-lock.yaml"
