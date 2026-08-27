@@ -1,6 +1,6 @@
 # SaanTayo production audit — 2026-08-27
 
-Baseline: `2068ac9`. All four tracked files and the nine-commit history inspected before implementation. GitHub API confirmed public GitHub Pages, `main:/`,`, at https://geng-geng8.github.io/SaanTayo/ (legacy branch publishing). No backend, tests, build system, service worker, deployment workflow, or repository instructions existed.
+Baseline: `2068ac9`. All four tracked files and the nine-commit history inspected before implementation. GitHub API confirmed public GitHub Pages, `main:/`, at https://geng-geng8.github.io/SaanTayo/ (legacy branch publishing). No backend, tests, build system, service worker, repository deployment workflow, or repository instructions existed. GitHub's generated Pages workflow was present.
 
 ## Preserve
 
