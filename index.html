@@ -459,8 +459,7 @@ Structure with clean Markdown:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            tools: [{ googleSearch: {} }]
+            systemInstruction: { parts: [{ text: systemInstruction }] }
           })
         });
 
