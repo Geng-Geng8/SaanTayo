@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SaanTayo - Personal Philippines Travel Engine</title>
+  
+  <!-- Mobile Web App Optimization -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#020617">
+  <link rel="icon" type="image/jpeg" href="SaayTayo-Logo.jpeg">
+
+  <!-- Core Libraries: Tailwind, Markdown, Sanitizer, Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <style>
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    .prose h2, .prose h3 { color: #38bdf8; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; line-height: 1.2; }
+    .prose strong { color: #f8fafc; }
+    .prose blockquote { border-left: 3px solid #38bdf8; padding-left: 0.75rem; color: #94a3b8; font-style: italic; background: #0f172a; border-radius: 0 0.375rem 0.375rem 0; padding-top: 0.25rem; padding-bottom: 0.25rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    .prose li { margin-bottom: 0.35rem; }
+    .prose table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.875rem; }
+    .prose th, .prose td { border: 1px solid #334155; padding: 0.5rem; text-align: left; }
+    .prose th { background-color: #1e293b; color: #38bdf8; }
+  </style>
+</head>
+<body class="min-h-full flex flex-col font-sans antialiased pb-20 selection:bg-cyan-500 selection:text-white">
+
+  <!-- Toast Notification (Fixed Race Condition) -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+    <i class="fa-solid fa-circle-check"></i>
+    <span id="toastMessage">Notification</span>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <img src="SaayTayo-Logo.jpeg" alt="SaanTayo Logo" class="w-8 h-8 rounded-lg object-cover border border-slate-700 shadow-sm" onerror="this.outerHTML='<span class=\'text-2xl\'>🌴</span>'">
+      <div>
+        <h1 class="font-black text-base tracking-tight bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-500 bg-clip-text text-transparent">SaanTayo</h1>
+        <p class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Trip Intelligence</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 sm:gap-2">
+      <button onclick="toggleModal('savedTripsModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-bookmark text-emerald-400"></i>
+        <!-- Fixed Tailwind syntax: py-0.5 -->
+        <span id="savedCountBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+      </button>
+      <button onclick="toggleModal('checklistModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-list-check text-cyan-400"></i>
+        <span class="hidden sm:inline font-medium">Checklist</span>
+      </button>
+      <button onclick="toggleModal('settingsModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
+        <i class="fa-solid fa-key text-amber-400"></i>
+        <span class="hidden sm:inline font-medium">API Key</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-xl w-full mx-auto p-4 space-y-4">
+
+    <!-- Mode Selector Tabs -->
+    <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+      <button id="modeItineraryBtn" onclick="setMode('itinerary')" class="py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm transition-all flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-map-location-dot"></i> Itinerary Builder
+      </button>
+      <button id="modeCompareBtn" onclick="setMode('compare')" class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-scale-balanced"></i> Destination Showdown
+      </button>
+    </div>
+
+    <!-- Input Form Card -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
+      
+      <!-- Destination Input -->
+      <div>
+        <label id="destLabel" class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+          <span>Destination</span>
+          <span class="text-[10px] text-slate-500 font-normal">e.g., El Nido & Coron, Palawan</span>
+        </label>
+        <div class="relative">
+          <i class="fa-solid fa-location-dot absolute left-3 top-3 text-slate-500 text-sm"></i>
+          <input type="text" id="destination" placeholder="e.g., El Nido & Coron, Palawan" class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-white placeholder-slate-600">
+        </div>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">Duration</label>
+          <select id="duration" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <option value="3 Days (Long Weekend)">3 Days</option>
+            <option value="5 Days" selected>5 Days</option>
+            <option value="7 Days (1 Week)">7 Days</option>
+            <option value="10 Days">10 Days</option>
+            <option value="14 Days (2 Weeks)">14 Days</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">Budget Tier</label>
+          <select id="budgetTier" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <option value="Budget-Friendly / Backpacker">💵 Budget</option>
+            <option value="Mid-Range / Comfortable Boutique" selected>💳 Mid-Range</option>
+            <option value="Luxury / Beachfront Resorts">💎 Luxury</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">Currency</label>
+          <select id="currencyPref" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <option value="PHP (₱) & CAD ($)" selected>PHP + CAD</option>
+            <option value="PHP (₱) Only">PHP (₱)</option>
+            <option value="CAD ($) Only">CAD ($)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Party Selection -->
+      <div>
+        <label class="block text-[11px] font-medium text-slate-400 mb-1.5">Who's Traveling?</label>
+        <div class="grid grid-cols-4 gap-1.5">
+          <label class="cursor-pointer">
+            <input type="radio" name="party" value="Couple / Partner" checked class="peer sr-only">
+            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">
+              💑 Couple
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="party" value="Solo Traveler" class="peer sr-only">
+            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">
+              🎒 Solo
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="party" value="Family with Kids" class="peer sr-only">
+            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">
+              👨‍👩‍👧 Family
+            </div>
+          </label>
+          <label class="cursor-pointer">
+            <input type="radio" name="party" value="Friends Group" class="peer sr-only">
+            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">
+              🤙 Friends
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Travel Moods / Vibe Pills -->
+      <div>
+        <label class="block text-[11px] font-medium text-slate-400 mb-1.5">Vibes & Priorities</label>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" onclick="toggleVibe(this, 'Pristine Beaches & Clear Water')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            🏖️ Pristine Beaches
+          </button>
+          <button type="button" onclick="toggleVibe(this, 'Adventures & Active Thrills')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            🧗 Adventure
+          </button>
+          <button type="button" onclick="toggleVibe(this, 'Must-Try Food & Local Eats')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            🍜 Local Foodie
+          </button>
+          <button type="button" onclick="toggleVibe(this, 'Reddit & Local Hidden Gems')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            💎 Hidden Gems
+          </button>
+          <button type="button" onclick="toggleVibe(this, 'Historic Landmarks & Heritage')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            🏛️ Heritage
+          </button>
+          <button type="button" onclick="toggleVibe(this, 'Chill & Sunset Vibe')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-500 transition-all active:scale-95">
+            🌅 Sunset Chill
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="generateBtn" onclick="runAIResearch()" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Search Forums & Generate Plan</span>
+      </button>
+
+    </section>
+
+    <!-- Stepped Loading Status -->
+    <div id="loadingStatus" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-3">
+      <div class="inline-block animate-spin text-cyan-400 text-2xl">
+        <i class="fa-solid fa-circle-notch"></i>
+      </div>
+      <div id="loadingMessage" class="text-xs font-semibold text-slate-300">Scanning r/phtravel & forum discussions...</div>
+      <p class="text-[10px] text-slate-500">Cross-referencing verified Reddit reviews, transit warnings, and local fees.</p>
+    </div>
+
+    <!-- Output & Results Card -->
+    <section id="resultsContainer" class="hidden space-y-3">
+      
+      <!-- Quick Actions Bar -->
+      <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <i class="fa-solid fa-sparkles text-cyan-400"></i>
+          <span id="resultMetaBadge" class="font-medium truncate max-w-[120px] sm:max-w-[200px]">Plan Ready</span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="saveCurrentPlan()" class="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold rounded-lg flex items-center gap-1 transition-all">
+            <i class="fa-solid fa-bookmark"></i> <span class="hidden sm:inline">Save</span>
+          </button>
+          <button onclick="sharePlan()" class="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-semibold rounded-lg flex items-center gap-1 transition-all">
+            <i class="fa-solid fa-arrow-up-from-bracket"></i> <span class="hidden sm:inline">Share</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Rendered Markdown Content -->
+      <div id="renderedMarkdown" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 prose prose-invert text-slate-200 text-sm max-w-none shadow-2xl leading-relaxed">
+      </div>
+
+      <!-- Verified Deep Booking & Map Links -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Direct Live Booking & Map Links</h4>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+          <a id="linkGoogleHotels" target="_blank" rel="noopener noreferrer" class="p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-300 font-medium transition-all">
+            🏨 Google Hotels
+          </a>
+          <a id="linkAirbnb" target="_blank" rel="noopener noreferrer" class="p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-300 font-medium transition-all">
+            🏡 Airbnb
+          </a>
+          <a id="linkKlook" target="_blank" rel="noopener noreferrer" class="p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-300 font-medium transition-all">
+            🎟️ Klook Tours
+          </a>
+          <a id="linkGoogleMaps" target="_blank" rel="noopener noreferrer" class="p-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-300 font-medium transition-all">
+            🗺️ Google Maps
+          </a>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Saved Trips Drawer Modal (Offline Island Cache) -->
+  <div id="savedTripsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i class="fa-solid fa-bookmark text-emerald-400"></i> Saved Trips (Offline Cache)
+        </h3>
+        <button onclick="toggleModal('savedTripsModal')" class="text-slate-500 hover:text-white text-sm">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">These plans are stored directly in your browser so you can review them with zero island LTE.</p>
+      
+      <div id="savedTripsList" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+        <!-- Injected via JavaScript -->
+      </div>
+
+      <button onclick="toggleModal('savedTripsModal')" class="w-full py-2 bg-slate-800 text-slate-200 text-xs font-semibold rounded-lg hover:bg-slate-700">Close</button>
+    </div>
+  </div>
+
+  <!-- Settings Modal (API Key) -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i class="fa-solid fa-key text-amber-400"></i> Settings & API Key
+        </h3>
+        <button onclick="toggleModal('settingsModal')" class="text-slate-500 hover:text-white text-sm">✕</button>
+      </div>
+      <p class="text-xs text-slate-400 leading-normal">
+        Your free Gemini API key is stored locally in your browser's <code class="text-cyan-400">localStorage</code>. It is never sent to GitHub or exposed publicly.
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Google AI Studio API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+      </div>
+      <div class="flex gap-2 justify-end">
+        <button onclick="toggleModal('settingsModal')" class="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg">Cancel</button>
+        <button onclick="saveApiKey()" class="px-4 py-1.5 bg-cyan-500 text-slate-950 font-bold text-xs rounded-lg hover:bg-cyan-400">Save Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Philippines Travel Checklist Modal -->
+  <div id="checklistModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-cyan-400"></i> SaanTayo Island Checklist
+        </h3>
+        <button onclick="toggleModal('checklistModal')" class="text-slate-500 hover:text-white text-sm">✕</button>
+      </div>
+      <div class="space-y-2 text-xs text-slate-300">
+        <label class="flex items-start gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
+          <input type="checkbox" class="mt-0.5 accent-cyan-500">
+          <span><strong>e-Travel QR Code:</strong> Complete at <code class="text-cyan-400">etravel.gov.ph</code> within 72 hours before flight arrival.</span>
+        </label>
+        <label class="flex items-start gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
+          <input type="checkbox" class="mt-0.5 accent-cyan-500">
+          <span><strong>Cash & GCash Reserve:</strong> Island ATMs (El Nido/Siargao/Coron) frequently run out of bills. Keep physical PHP notes.</span>
+        </label>
+        <label class="flex items-start gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
+          <input type="checkbox" class="mt-0.5 accent-cyan-500">
+          <span><strong>Port & Environmental Fees:</strong> Keep small bills (₱100-₱500) ready for terminal and local municipal eco-tickets.</span>
+        </label>
+        <label class="flex items-start gap-2 p-2 bg-slate-950 rounded-lg border border-slate-800 cursor-pointer">
+          <input type="checkbox" class="mt-0.5 accent-cyan-500">
+          <span><strong>Waterproof Gear:</strong> 15L-20L Dry Bag & Aqua Shoes for rocky island bangka boat transfers.</span>
+        </label>
+      </div>
+      <button onclick="toggleModal('checklistModal')" class="w-full py-2 bg-slate-800 text-slate-200 text-xs font-semibold rounded-lg hover:bg-slate-700">Close</button>
+    </div>
+  </div>
+
+  <script>
+    // Configuration & State
+    marked.use({ breaks: true, gfm: true }); // Enables exact line breaks from LLM
+    let currentMode = 'itinerary';
+    let selectedVibes = ['Pristine Beaches & Clear Water', 'Must-Try Food & Local Eats', 'Reddit & Local Hidden Gems'];
+    let lastGeneratedRawText = '';
+    let currentDestinationName = '';
+    let toastTimeout; // Prevents race condition
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('saantayo_gemini_key') || localStorage.getItem('gemini_travel_api_key');
+      if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+      syncVibeButtons();
+      updateSavedBadge();
+    });
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMessage').innerText = msg;
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+    }
+
+    function toggleModal(id) {
+      const modal = document.getElementById(id);
+      modal.classList.toggle('hidden');
+      if (id === 'savedTripsModal' && !modal.classList.contains('hidden')) {
+        renderSavedTrips();
+      }
+    }
+
+    function saveApiKey() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (key) {
+        localStorage.setItem('saantayo_gemini_key', key);
+        toggleModal('settingsModal');
+        showToast('API Key saved securely!');
+      }
+    }
+
+    function setMode(mode) {
+      currentMode = mode;
+      const itinBtn = document.getElementById('modeItineraryBtn');
+      const compBtn = document.getElementById('modeCompareBtn');
+      const destLabel = document.getElementById('destLabel');
+      const destInput = document.getElementById('destination');
+
+      if (mode === 'itinerary') {
+        itinBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm transition-all flex items-center justify-center gap-1.5';
+        compBtn.className = 'py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5';
+        destLabel.innerHTML = '<span>Destination</span><span class="text-[10px] text-slate-500 font-normal">e.g., El Nido & Coron, Palawan</span>';
+        destInput.placeholder = 'e.g., El Nido & Coron, Palawan';
+      } else {
+        compBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm transition-all flex items-center justify-center gap-1.5';
+        itinBtn.className = 'py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5';
+        destLabel.innerHTML = '<span>Compare Destinations</span><span class="text-[10px] text-slate-500 font-normal">e.g., Siargao vs Boracay</span>';
+        destInput.placeholder = 'e.g., Siargao vs Boracay vs El Nido';
+      }
+    }
+
+    function toggleVibe(btn, vibe) {
+      if (selectedVibes.includes(vibe)) {
+        selectedVibes = selectedVibes.filter(v => v !== vibe);
+        btn.classList.remove('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
+        btn.classList.add('border-slate-700', 'bg-slate-950', 'text-slate-300');
+      } else {
+        selectedVibes.push(vibe);
+        btn.classList.remove('border-slate-700', 'bg-slate-950', 'text-slate-300');
+        btn.classList.add('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
+      }
+    }
+
+    function syncVibeButtons() {
+      document.querySelectorAll('.vibe-btn').forEach(btn => {
+        const text = btn.innerText;
+        if (selectedVibes.some(v => text.includes(v.split(' ')[0]))) {
+          btn.classList.add('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
+          btn.classList.remove('border-slate-700', 'bg-slate-950', 'text-slate-300');
+        }
+      });
+    }
+
+    async function runAIResearch() {
+      const apiKey = localStorage.getItem('saantayo_gemini_key') || localStorage.getItem('gemini_travel_api_key');
+      if (!apiKey) {
+        toggleModal('settingsModal');
+        showToast('Please save your Google AI Studio API key');
+        return;
+      }
+
+      currentDestinationName = document.getElementById('destination').value.trim();
+      if (!currentDestinationName) {
+        currentDestinationName = currentMode === 'itinerary' ? 'Palawan (El Nido & Coron)' : 'Siargao vs Boracay';
+        document.getElementById('destination').value = currentDestinationName;
+      }
+
+      const duration = document.getElementById('duration').value;
+      const budgetTier = document.getElementById('budgetTier').value;
+      const currency = document.getElementById('currencyPref').value;
+      const party = document.querySelector('input[name="party"]:checked').value;
+
+      document.getElementById('generateBtn').disabled = true;
+      document.getElementById('loadingStatus').classList.remove('hidden');
+      document.getElementById('resultsContainer').classList.add('hidden');
+
+      const statusMessages = [
+        "Scanning r/phtravel & local Reddit recommendations...",
+        "Checking TripAdvisor & ferry transit schedules...",
+        "Calculating CAD $ & PHP ₱ split budgets...",
+        "Structuring daily food, landmarks & hidden gems..."
+      ];
+      let msgIndex = 0;
+      const interval = setInterval(() => {
+        msgIndex = (msgIndex + 1) % statusMessages.length;
+        document.getElementById('loadingMessage').innerText = statusMessages[msgIndex];
+      }, 1500);
+
+      const systemInstruction = `You are SaanTayo, an expert travel intelligence engine specialized in Philippine travel.
+Prioritize candid, unfiltered recommendations from r/phtravel, Reddit, TripAdvisor, and local forums over sponsored blogs.
+Always deliver hyper-realistic logistics: ferry schedules, island cash ATM warnings, tricycle fare ranges, and environmental terminal fees.
+Dual Currency Rule: Quote budgets in Philippine Pesos (₱) alongside Canadian Dollars (CAD $) at approximately $1 CAD = ₱42 PHP.
+Provide Total and Per-Person estimates for: ${party}.`;
+
+      let userPrompt = "";
+      if (currentMode === 'itinerary') {
+        userPrompt = `Generate a ${duration} travel plan for ${currentDestinationName}.
+Party: ${party}.
+Budget: ${budgetTier} (${currency}).
+Priorities: ${selectedVibes.join(', ')}.
+
+Structure with clean Markdown:
+1. **Executive Overview & Flight Routing**
+2. **Budget Breakdown Table**: (Lodging, Island Tours, Tricycles/Van Transfers, Food/Drinks, Eco Fees - Show Per-Person and Total in CAD & PHP).
+3. **Day-by-Day Plan**: Morning, Afternoon, Evening, Late Night. Clearly mark [Must-See Landmark], [Hidden Gem / Reddit Tip], and [Foodie Spot].
+4. **Local Transit & Survival Secrets**: Tricycle rates, cash rules, and island scam warnings.`;
+      } else {
+        userPrompt = `Perform a Destination Showdown between: ${currentDestinationName}.
+Party: ${party}.
+Budget: ${budgetTier} (${currency}).
+Priorities: ${selectedVibes.join(', ')}.
+
+Structure with clean Markdown:
+1. **Side-by-Side Comparison Scorecard Table**: (Beaches & Water, Adventure/Vibe, Food Scene, Crowds & Transit, Avg Daily Cost CAD/PHP).
+2. **Detailed Category Breakdown**: Candid pros and cons from r/phtravel discussions.
+3. **The Final Verdict**: Clear winner recommendation tailored to the selected vibe.`;
+      }
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            tools: [{ googleSearch: {} }]
+          })
+        });
+
+        const data = await response.json();
+        clearInterval(interval);
+
+        if (data.candidates && data.candidates[0].content.parts[0].text) {
+          lastGeneratedRawText = data.candidates[0].content.parts[0].text;
+          const cleanHtml = DOMPurify.sanitize(marked.parse(lastGeneratedRawText));
+          document.getElementById('renderedMarkdown').innerHTML = cleanHtml;
+          document.getElementById('resultMetaBadge').innerText = `${currentDestinationName}`;
+          updateDeepLinks(currentDestinationName);
+          document.getElementById('resultsContainer').classList.remove('hidden');
+          showToast('Plan generated successfully!');
+        } else {
+          // Hardened error handling to reveal exact API rejection reason
+          const errMsg = data.error?.message || "Could not generate plan. Please verify your API key and permissions.";
+          alert("API Error: " + errMsg);
+        }
+      } catch (err) {
+        clearInterval(interval);
+        alert("Network Error: Make sure your device has internet access and your API key is valid. Details: " + err.message);
+      } finally {
+        document.getElementById('generateBtn').disabled = false;
+        document.getElementById('loadingStatus').classList.add('hidden');
+      }
+    }
+
+    function updateDeepLinks(destination) {
+      const q = encodeURIComponent(destination + " Philippines");
+      document.getElementById('linkGoogleHotels').href = `https://www.google.com/travel/hotels?q=${q}`;
+      document.getElementById('linkAirbnb').href = `https://www.airbnb.com/s/${q}/homes`;
+      document.getElementById('linkKlook').href = `https://www.klook.com/en-PH/search?keyword=${q}`;
+      document.getElementById('linkGoogleMaps').href = `https://www.google.com/maps/search/?api=1&query=${q}`;
+    }
+
+    function saveCurrentPlan() {
+      if (!lastGeneratedRawText) return;
+      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
+      const newTrip = {
+        id: Date.now(),
+        destination: currentDestinationName,
+        date: new Date().toLocaleDateString('en-CA'), // Using Canadian date formatting structure
+        content: lastGeneratedRawText
+      };
+      trips.unshift(newTrip);
+      localStorage.setItem('saantayo_saved_trips', JSON.stringify(trips.slice(0, 15)));
+      updateSavedBadge();
+      showToast('Plan saved to offline storage!');
+    }
+
+    function updateSavedBadge() {
+      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
+      document.getElementById('savedCountBadge').innerText = trips.length;
+    }
+
+    function renderSavedTrips() {
+      const container = document.getElementById('savedTripsList');
+      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
+      if (trips.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-center py-6">No saved trips yet. Generate a plan and tap Save!</p>';
+        return;
+      }
+      container.innerHTML = trips.map(t => `
+        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+          <div class="overflow-hidden">
+            <h4 class="font-bold text-slate-200 truncate">${t.destination}</h4>
+            <p class="text-[10px] text-slate-500">Saved: ${t.date}</p>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button onclick="loadSavedTrip(${t.id})" class="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-lg hover:bg-cyan-500/20 font-semibold text-xs transition-colors">Load</button>
+            <button onclick="deleteSavedTrip(${t.id})" class="p-1 text-slate-600 hover:text-rose-400 text-xs transition-colors"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function loadSavedTrip(id) {
+      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
+      const trip = trips.find(t => t.id === id);
+      if (trip) {
+        lastGeneratedRawText = trip.content;
+        currentDestinationName = trip.destination;
+        const cleanHtml = DOMPurify.sanitize(marked.parse(trip.content));
+        document.getElementById('renderedMarkdown').innerHTML = cleanHtml;
+        document.getElementById('resultMetaBadge').innerText = `${trip.destination} (Cache)`;
+        updateDeepLinks(trip.destination);
+        document.getElementById('resultsContainer').classList.remove('hidden');
+        toggleModal('savedTripsModal');
+        showToast(`Loaded ${trip.destination}!`);
+      }
+    }
+
+    function deleteSavedTrip(id) {
+      let trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
+      trips = trips.filter(t => t.id !== id);
+      localStorage.setItem('saantayo_saved_trips', JSON.stringify(trips));
+      updateSavedBadge();
+      renderSavedTrips();
+      showToast('Trip deleted');
+    }
+
+    async function sharePlan() {
+      if (!lastGeneratedRawText) return;
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `SaanTayo Plan: ${currentDestinationName}`,
+            text: lastGeneratedRawText.slice(0, 500) + "...\n\n(Generated via SaanTayo)",
+            url: window.location.href
+          });
+        } catch (e) { console.log('Share canceled'); }
+      } else {
+        navigator.clipboard.writeText(lastGeneratedRawText);
+        showToast('Plan copied to clipboard!');
+      }
+    }
+  </script>
+</body>
+</html>
