@@ -1,0 +1,29 @@
+{
+  "name": "saantayo",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "deploy:api": "wrangler deploy",
+    "test:live": "node scripts/live-smoke.mjs"
+  },
+  "dependencies": {
+    "dompurify": "3.4.14",
+    "marked": "18.0.11"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "sharp": "0.35.4",
+    "tailwindcss": "3.4.19",
+    "wrangler": "4.125.0",
+    "jsdom": "26.1.0"
+  }
+}

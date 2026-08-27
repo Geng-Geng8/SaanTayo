@@ -1,553 +1,717 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="h-full bg-slate-950 text-slate-100">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SaanTayo - Personal Philippines Travel Engine</title>
-  
-  <!-- Mobile Web App Optimization -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#020617">
-  <link rel="icon" type="image/jpeg" href="SaayTayo-Logo.jpeg">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>SaanTayo - Personal Philippines Travel Engine</title>
 
-  <!-- Core Libraries -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  
-  <!-- Flatpickr (Calendar Tool) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-  <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/dark.css">
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Mobile Web App Optimization -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#020617" />
+    <link rel="icon" type="image/png" href="./assets/icon-192.png" />
 
-  <style>
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
-    .prose h2, .prose h3 { color: #38bdf8; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; line-height: 1.2; }
-    .prose strong { color: #f8fafc; }
-    .prose blockquote { border-left: 3px solid #38bdf8; padding-left: 0.75rem; color: #94a3b8; font-style: italic; background: #0f172a; border-radius: 0 0.375rem 0.375rem 0; padding-top: 0.25rem; padding-bottom: 0.25rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .prose ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
-    .prose li { margin-bottom: 0.35rem; }
-    .prose table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.875rem; }
-    .prose th, .prose td { border: 1px solid #334155; padding: 0.5rem; text-align: left; }
-    .prose th { background-color: #1e293b; color: #38bdf8; }
-    
-    /* Chat Bubble Styles */
-    .chat-bubble-model { background: #0f172a; border: 1px solid #1e293b; color: #e2e8f0; border-radius: 0.75rem 0.75rem 0.75rem 0; }
-    .chat-bubble-user { background: #0891b2; color: #ecfeff; border-radius: 0.75rem 0.75rem 0 0.75rem; align-self: flex-end; }
-  </style>
-</head>
-<body class="min-h-full flex flex-col font-sans antialiased pb-20 selection:bg-cyan-500 selection:text-white">
-
-  <!-- Toast Notification -->
-  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2">
-    <i class="fa-solid fa-circle-check"></i>
-    <span id="toastMessage">Notification</span>
-  </div>
-
-  <!-- Top Navigation Bar -->
-  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-2.5">
-      <img src="SaayTayo-Logo.jpeg" alt="SaanTayo Logo" class="w-8 h-8 rounded-lg object-cover border border-slate-700 shadow-sm" onerror="this.outerHTML='<span class=\'text-2xl\'>🌴</span>'">
-      <div>
-        <h1 class="font-black text-base tracking-tight bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-500 bg-clip-text text-transparent">SaanTayo</h1>
-        <p class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Trip Intelligence</p>
-      </div>
-    </div>
-    <div class="flex items-center gap-1.5 sm:gap-2">
-      <button onclick="toggleModal('savedTripsModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
-        <i class="fa-solid fa-bookmark text-emerald-400"></i>
-        <span id="savedCountBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
-      </button>
-      <button onclick="toggleModal('checklistModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
-        <i class="fa-solid fa-list-check text-cyan-400"></i>
-        <span class="hidden sm:inline font-medium">Checklist</span>
-      </button>
-      <button onclick="toggleModal('settingsModal')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors">
-        <i class="fa-solid fa-key text-amber-400"></i>
-      </button>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <main class="flex-1 max-w-xl w-full mx-auto p-4 space-y-4">
-
-    <!-- Mode Selector Tabs -->
-    <div class="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-      <button id="modeItineraryBtn" onclick="setMode('itinerary')" class="py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm transition-all flex items-center justify-center gap-1.5">
-        <i class="fa-solid fa-map-location-dot"></i> Itinerary Builder
-      </button>
-      <button id="modeCompareBtn" onclick="setMode('compare')" class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5">
-        <i class="fa-solid fa-scale-balanced"></i> Destination Showdown
-      </button>
+    <meta
+      name="description"
+      content="Practical Philippines itineraries, grounded travel research, and saved plans for the road."
+    />
+    <meta http-equiv="Content-Security-Policy" content="__CSP__" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./assets/icon-192.png" />
+    <link rel="stylesheet" href="./assets/app.css" />
+    <script type="module" src="./assets/app.js"></script>
+  </head>
+  <body
+    class="min-h-full flex flex-col font-sans antialiased pb-20 selection:bg-cyan-500 selection:text-white"
+  >
+    <a class="skip-link" href="#planner">Skip to planner</a>
+    <!-- Toast Notification -->
+    <div
+      id="toast"
+      role="status"
+      aria-live="polite"
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-cyan-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-2"
+    >
+      <span aria-hidden="true">✓</span>
+      <span id="toastMessage">Notification</span>
     </div>
 
-    <!-- Input Form Card -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
-      
-      <!-- Destination Input -->
-      <div>
-        <label id="destLabel" class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-          <span>Destination</span>
-        </label>
-        <div class="relative">
-          <i class="fa-solid fa-location-dot absolute left-3 top-3 text-slate-500 text-sm"></i>
-          <input type="text" id="destination" placeholder="e.g., El Nido & Coron, Palawan" class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-cyan-500 text-white placeholder-slate-600">
+    <!-- Top Navigation Bar -->
+    <header
+      class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-2.5">
+        <img
+          src="./assets/logo.webp"
+          alt=""
+          width="40"
+          height="40"
+          class="w-10 h-10 rounded-lg object-cover border border-slate-700"
+        />
+        <div>
+          <h1
+            class="font-black text-base tracking-tight bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-500 bg-clip-text text-transparent"
+          >
+            SaanTayo
+          </h1>
+          <p
+            class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase"
+          >
+            Trip Intelligence
+          </p>
         </div>
       </div>
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button
+          data-dialog="savedTripsModal"
+          aria-label="Saved trips"
+          class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
+        >
+          <span aria-hidden="true">▣</span>
+          <span
+            id="savedCountBadge"
+            class="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+            >0</span
+          >
+        </button>
+        <button
+          data-dialog="checklistModal"
+          aria-label="Travel checklist"
+          class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
+        >
+          <span aria-hidden="true">☑</span>
+          <span class="hidden sm:inline font-medium">Checklist</span>
+        </button>
+        <button
+          data-dialog="settingsModal"
+          aria-label="About and privacy"
+          class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </div>
+    </header>
 
-      <!-- Dates & Currency Row -->
-      <div class="grid grid-cols-2 gap-3">
+    <!-- Main Container -->
+    <main class="flex-1 max-w-2xl w-full mx-auto p-4 space-y-4">
+      <div id="connectionStatus" class="notice" role="status">
+        Checking research connection…
+      </div>
+      <button id="updateApp" type="button" class="secondary hidden">
+        App update ready · reload
+      </button>
+      <div id="storageWarning" class="notice warning hidden" role="alert"></div>
+      <!-- Mode Selector Tabs -->
+      <div
+        class="mode-tabs grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800"
+      >
+        <button
+          id="modeItineraryBtn"
+          data-mode="itinerary"
+          aria-pressed="true"
+          class="py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm transition-all flex items-center justify-center gap-1.5"
+        >
+          <span aria-hidden="true">◇</span> Itinerary Builder
+        </button>
+        <button
+          id="modeCompareBtn"
+          data-mode="compare"
+          aria-pressed="false"
+          class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1.5"
+        >
+          <span aria-hidden="true">⇄</span> Destination Showdown
+        </button>
+        <button
+          id="modeResearchBtn"
+          data-mode="research"
+          aria-pressed="false"
+          class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white"
+        >
+          Travel Research
+        </button>
+      </div>
+
+      <!-- Input Form Card -->
+      <form
+        id="planner"
+        class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4"
+      >
+        <div class="intro">
+          <p class="eyebrow">PHILIPPINES, WITH A PLAN</p>
+          <h2>Where are we going?</h2>
+          <p>Good days start with realistic routes.</p>
+        </div>
+        <!-- Destination Input -->
         <div>
-          <label class="block text-[11px] font-medium text-slate-400 mb-1">Travel Dates</label>
+          <label
+            id="destLabel"
+            for="destination"
+            class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between"
+          >
+            <span>Destination</span>
+          </label>
           <div class="relative">
-            <i class="fa-solid fa-calendar absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
-            <input type="text" id="dateRange" placeholder="Select dates..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-2 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer" readonly>
+            <input
+              type="text"
+              id="destination"
+              required
+              maxlength="200"
+              placeholder="e.g., El Nido & Coron, Palawan"
+              class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-cyan-500 text-white placeholder-slate-600"
+            />
           </div>
+        </div>
+
+        <div id="secondDestination" class="hidden">
+          <label for="destinationB">Compare with</label
+          ><input
+            id="destinationB"
+            maxlength="200"
+            placeholder="e.g., Siquijor"
+          />
+        </div>
+        <div id="researchQuestion" class="hidden">
+          <label for="question">What would you like to know?</label
+          ><textarea
+            id="question"
+            maxlength="3000"
+            rows="3"
+            placeholder="Which cafés near IT Park are open in the evening?"
+          ></textarea>
         </div>
         <div>
-          <label class="block text-[11px] font-medium text-slate-400 mb-1">Currency Output</label>
-          <select id="currencyPref" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
-            <option value="PHP (₱) & CAD ($)" selected>PHP + CAD</option>
-            <option value="PHP (₱) Only">PHP (₱)</option>
-            <option value="CAD ($) Only">CAD ($)</option>
-          </select>
+          <label for="arrivalBase"
+            >Starting point / arrival base
+            <span class="muted">(optional)</span></label
+          ><input
+            id="arrivalBase"
+            maxlength="200"
+            placeholder="e.g., Cebu airport, arriving at noon"
+          />
         </div>
-      </div>
-
-      <!-- Itemized Cost Controls -->
-      <div class="bg-slate-950/50 p-3 rounded-xl border border-slate-800 space-y-3">
-        <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider flex justify-between">
-          <span>Budget Limits</span>
-          <span class="text-[9px] text-slate-500 font-normal">(Leave blank for flexible)</span>
-        </label>
-        
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Max Hotel / Night</label>
-            <input type="number" id="budgetHotel" placeholder="e.g. 5000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <label for="startDate"
+              >Start date <span class="muted">(optional)</span></label
+            ><input id="startDate" type="date" />
           </div>
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Cars & Transit (Total)</label>
-            <input type="number" id="budgetTransit" placeholder="e.g. 2000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <label for="endDate"
+              >End date <span class="muted">(optional)</span></label
+            ><input id="endDate" type="date" />
           </div>
           <div>
-            <label class="block text-[10px] text-slate-400 mb-1">Excursions (Total)</label>
-            <input type="number" id="budgetExcursion" placeholder="e.g. 8000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <label for="tripDays">Days if dates flexible</label
+            ><input
+              id="tripDays"
+              type="number"
+              min="1"
+              max="21"
+              value="3"
+              required
+            />
+          </div>
+          <div>
+            <label for="currencyPref">Currency display</label
+            ><select id="currencyPref">
+              <option value="PHP_CAD">PHP + CAD</option>
+              <option value="PHP">PHP only</option>
+            </select>
           </div>
         </div>
-        
-        <label class="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300 font-medium pt-1">
-          <input type="checkbox" id="freeSightseeing" class="accent-cyan-500 h-3.5 w-3.5" checked>
-          <span>Prioritize <strong>$0 / Free Sightseeing</strong> options where possible</span>
-        </label>
-      </div>
+        <!-- Itemized Cost Controls -->
+        <div
+          class="bg-slate-950/50 p-3 rounded-xl border border-slate-800 space-y-3"
+        >
+          <label
+            class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider flex justify-between"
+          >
+            <span>Budget Limits</span>
+            <span class="text-[9px] text-slate-500 font-normal"
+              >All caps in PHP · whole group</span
+            >
+          </label>
 
-      <!-- Party Selection -->
-      <div>
-        <label class="block text-[11px] font-medium text-slate-400 mb-1.5">Who's Traveling?</label>
-        <div class="grid grid-cols-4 gap-1.5">
-          <label class="cursor-pointer">
-            <input type="radio" name="party" value="Couple / Partner" checked class="peer sr-only">
-            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">💑 Couple</div>
-          </label>
-          <label class="cursor-pointer">
-            <input type="radio" name="party" value="Solo Traveler" class="peer sr-only">
-            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">🎒 Solo</div>
-          </label>
-          <label class="cursor-pointer">
-            <input type="radio" name="party" value="Family with Kids" class="peer sr-only">
-            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">👨‍👩‍👧 Family</div>
-          </label>
-          <label class="cursor-pointer">
-            <input type="radio" name="party" value="Friends Group" class="peer sr-only">
-            <div class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium">🤙 Friends</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label for="budgetTotal">Overall trip cap (₱)</label
+              ><input
+                type="number"
+                id="budgetTotal"
+                min="0"
+                max="10000000"
+                step="0.01"
+                placeholder="Flexible"
+              />
+            </div>
+            <div>
+              <label for="strictBudget">Budget approach</label
+              ><select id="strictBudget">
+                <option value="flexible">Flexible / suggest tradeoffs</option>
+                <option value="strict">Strict / stay within caps</option>
+              </select>
+            </div>
+          </div>
+          <div class="budget-fields grid grid-cols-3 gap-2">
+            <div>
+              <label
+                for="budgetHotel"
+                class="block text-[10px] text-slate-400 mb-1"
+                >Lodging / night (₱)</label
+              >
+              <input
+                type="number"
+                id="budgetHotel"
+                min="0"
+                max="10000000"
+                step="0.01"
+                placeholder="e.g. 5000"
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label
+                for="budgetTransit"
+                class="block text-[10px] text-slate-400 mb-1"
+                >All transport (₱)</label
+              >
+              <input
+                type="number"
+                id="budgetTransit"
+                min="0"
+                max="10000000"
+                step="0.01"
+                placeholder="e.g. 2000"
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label
+                for="budgetExcursion"
+                class="block text-[10px] text-slate-400 mb-1"
+                >Activities (₱)</label
+              >
+              <input
+                type="number"
+                id="budgetExcursion"
+                min="0"
+                max="10000000"
+                step="0.01"
+                placeholder="e.g. 8000"
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <label
+            class="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300 font-medium pt-1"
+          >
+            <input
+              type="checkbox"
+              id="freeSightseeing"
+              class="accent-cyan-500 h-3.5 w-3.5"
+              checked
+            />
+            <span
+              >Prioritize <strong>free sightseeing</strong> options where
+              possible</span
+            >
           </label>
         </div>
-      </div>
 
-      <!-- Travel Moods / Vibe Pills -->
-      <div>
-        <label class="block text-[11px] font-medium text-slate-400 mb-1.5">Vibes & Priorities</label>
-        <div class="flex flex-wrap gap-1.5">
-          <button type="button" onclick="toggleVibe(this, 'Pristine Beaches & Clear Water')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all">🏖️ Pristine Beaches</button>
-          <button type="button" onclick="toggleVibe(this, 'Adventures & Active Thrills')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all">🧗 Adventure</button>
-          <button type="button" onclick="toggleVibe(this, 'Must-Try Food & Local Eats')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all">🍜 Local Foodie</button>
-          <button type="button" onclick="toggleVibe(this, 'Reddit & Local Hidden Gems')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all">💎 Hidden Gems</button>
-          <button type="button" onclick="toggleVibe(this, 'Historic Landmarks & Heritage')" class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all">🏛️ Heritage</button>
+        <!-- Party Selection -->
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1.5"
+            >Who's Traveling?</label
+          >
+          <div class="grid grid-cols-4 gap-1.5">
+            <label class="cursor-pointer">
+              <input
+                type="radio"
+                name="party"
+                value="Couple / Partner"
+                checked
+                class="peer sr-only"
+              />
+              <div
+                class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium"
+              >
+                💑 Couple
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input
+                type="radio"
+                name="party"
+                value="Solo Traveler"
+                class="peer sr-only"
+              />
+              <div
+                class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium"
+              >
+                🎒 Solo
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input
+                type="radio"
+                name="party"
+                value="Family with Kids"
+                class="peer sr-only"
+              />
+              <div
+                class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium"
+              >
+                👨‍👩‍👧 Family
+              </div>
+            </label>
+            <label class="cursor-pointer">
+              <input
+                type="radio"
+                name="party"
+                value="Friends Group"
+                class="peer sr-only"
+              />
+              <div
+                class="py-1.5 text-center text-xs rounded-lg border border-slate-700 bg-slate-950 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 peer-checked:text-cyan-300 transition-all font-medium"
+              >
+                🤙 Friends
+              </div>
+            </label>
+          </div>
         </div>
+
+        <div>
+          <label for="people">Number of travellers</label
+          ><input
+            id="people"
+            type="number"
+            value="2"
+            min="1"
+            max="20"
+            required
+          />
+          <p class="muted">
+            Includes everyone; specify ages or room needs in follow-up if
+            relevant.
+          </p>
+        </div>
+        <!-- Travel Moods / Vibe Pills -->
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1.5"
+            >Vibes & Priorities</label
+          >
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              data-vibe="Pristine Beaches & Clear Water"
+              aria-pressed="false"
+              class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all"
+            >
+              🏖️ Pristine Beaches
+            </button>
+            <button
+              type="button"
+              data-vibe="Adventures & Active Thrills"
+              aria-pressed="false"
+              class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all"
+            >
+              🧗 Adventure
+            </button>
+            <button
+              type="button"
+              data-vibe="Must-Try Food & Local Eats"
+              aria-pressed="false"
+              class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all"
+            >
+              🍜 Local Foodie
+            </button>
+            <button
+              type="button"
+              data-vibe="Local Hidden Gems"
+              aria-pressed="false"
+              class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all"
+            >
+              💎 Hidden Gems
+            </button>
+            <button
+              type="button"
+              data-vibe="Historic Landmarks & Heritage"
+              aria-pressed="false"
+              class="vibe-btn px-2.5 py-1 text-xs rounded-full border border-slate-700 bg-slate-950 text-slate-300 transition-all"
+            >
+              🏛️ Heritage
+            </button>
+          </div>
+        </div>
+
+        <!-- Action Button -->
+        <button
+          id="generateBtn"
+          type="submit"
+          class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <span aria-hidden="true">✦</span>
+          <span>Generate & Research Plan</span>
+        </button>
+
+        <p class="muted">
+          Uses Gemini with Google Search and Google Maps when relevant. Research
+          is AI-assisted, not a booking or a guaranteed timetable.
+        </p>
+      </form>
+
+      <div id="errorMessage" class="notice warning hidden" role="alert"></div>
+      <!-- Stepped Loading Status -->
+      <div
+        id="loadingStatus"
+        role="status"
+        aria-live="polite"
+        class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-3"
+      >
+        <div class="inline-block animate-spin text-cyan-400 text-2xl">
+          <span aria-hidden="true">◌</span>
+        </div>
+        <div id="loadingMessage" class="text-xs font-semibold text-slate-300">
+          Researching your trip…
+        </div>
+        <p class="text-[10px] text-slate-500">
+          Checking what is practical. This can take up to 90 seconds.
+        </p>
       </div>
 
-      <!-- Action Button -->
-      <button id="generateBtn" onclick="runAIResearch()" class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-        <i class="fa-solid fa-wand-magic-sparkles"></i>
-        <span>Generate & Research Plan</span>
+      <button id="cancelRequest" class="secondary hidden" type="button">
+        Cancel request
       </button>
-
-    </section>
-
-    <!-- Stepped Loading Status -->
-    <div id="loadingStatus" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center space-y-3">
-      <div class="inline-block animate-spin text-cyan-400 text-2xl"><i class="fa-solid fa-circle-notch"></i></div>
-      <div id="loadingMessage" class="text-xs font-semibold text-slate-300">Scanning r/phtravel & forum discussions...</div>
-      <p class="text-[10px] text-slate-500">Cross-referencing verified Reddit reviews, transit warnings, and local fees.</p>
-    </div>
-
-    <!-- Output & Results Card -->
-    <section id="resultsContainer" class="hidden space-y-4">
-      
-      <!-- Quick Actions Bar -->
-      <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-        <div class="flex items-center gap-2 text-xs text-slate-400">
-          <i class="fa-solid fa-sparkles text-cyan-400"></i>
-          <span id="resultMetaBadge" class="font-medium truncate max-w-[120px] sm:max-w-[200px]">Plan Ready</span>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <button onclick="saveCurrentPlan()" class="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-lg flex items-center gap-1"><i class="fa-solid fa-bookmark"></i> <span class="hidden sm:inline">Save</span></button>
-          <button onclick="sharePlan()" class="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold rounded-lg flex items-center gap-1"><i class="fa-solid fa-arrow-up-from-bracket"></i> <span class="hidden sm:inline">Share</span></button>
-        </div>
-      </div>
-
-      <!-- Rendered Markdown Content -->
-      <div id="renderedMarkdown" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 prose prose-invert text-slate-200 text-sm max-w-none shadow-2xl leading-relaxed"></div>
-
-      <!-- AI Chat Assistant Box -->
-      <div id="chatSection" class="bg-slate-900 border border-slate-800 rounded-2xl flex flex-col h-[400px] overflow-hidden shadow-2xl">
-        <div class="p-3 border-b border-slate-800 bg-slate-950 flex justify-between items-center">
-          <span class="text-xs font-bold text-cyan-400 flex items-center gap-2"><i class="fa-solid fa-robot"></i> Ask SaanTayo Follow-Up Questions</span>
-        </div>
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 text-sm flex flex-col">
-          <div class="chat-bubble-model p-3 text-xs w-[85%] self-start shadow-sm">
-            I've memorized the plan above! Want to know where the closest ATMs are, or if you can find vegan food near your Day 2 hotel? Ask away!
+      <!-- Output & Results Card -->
+      <section id="resultsContainer" class="hidden space-y-4">
+        <!-- Quick Actions Bar -->
+        <div
+          class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-3 py-2"
+        >
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span aria-hidden="true">✦</span>
+            <span
+              id="resultMetaBadge"
+              class="font-medium truncate max-w-[120px] sm:max-w-[200px]"
+              >Plan Ready</span
+            >
           </div>
-        </div>
-        <div class="p-3 border-t border-slate-800 bg-slate-950 flex gap-2">
-          <input type="text" id="chatInput" placeholder="e.g., Will the ferry be rough?" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
-          <button onclick="sendChatMessage()" class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-bold transition-colors"><i class="fa-solid fa-paper-plane"></i></button>
-        </div>
-      </div>
-
-    </section>
-  </main>
-
-  <!-- Settings Modal (API Key) -->
-  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-sm text-white flex items-center gap-2">
-          <i class="fa-solid fa-key text-amber-400"></i> Settings & API Key
-        </h3>
-        <button onclick="toggleModal('settingsModal')" class="text-slate-500 hover:text-white">✕</button>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-300 mb-1">Google AI Studio API Key</label>
-        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
-      </div>
-      <div class="flex gap-2 justify-end">
-        <button onclick="toggleModal('settingsModal')" class="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg">Cancel</button>
-        <button onclick="saveApiKey()" class="px-4 py-1.5 bg-cyan-500 text-slate-950 font-bold text-xs rounded-lg">Save Key</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Saved Trips & Checklist Modals omitted for brevity, logic remains identical -->
-  <!-- Ensure you keep the HTML for savedTripsModal & checklistModal from previous versions -->
-  <!-- I am inserting them back to ensure it remains a complete copy-paste solution -->
-  
-  <div id="savedTripsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-sm text-white flex items-center gap-2"><i class="fa-solid fa-bookmark text-emerald-400"></i> Saved Trips</h3>
-        <button onclick="toggleModal('savedTripsModal')" class="text-slate-500 hover:text-white">✕</button>
-      </div>
-      <div id="savedTripsList" class="flex-1 overflow-y-auto space-y-2 text-xs"></div>
-      <button onclick="toggleModal('savedTripsModal')" class="w-full py-2 bg-slate-800 text-slate-200 text-xs font-semibold rounded-lg">Close</button>
-    </div>
-  </div>
-
-  <div id="checklistModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-      <div class="flex items-center justify-between">
-        <h3 class="font-bold text-sm text-white flex items-center gap-2"><i class="fa-solid fa-shield-halved text-cyan-400"></i> Island Checklist</h3>
-        <button onclick="toggleModal('checklistModal')" class="text-slate-500">✕</button>
-      </div>
-      <div class="space-y-2 text-xs text-slate-300">
-        <p><strong>e-Travel QR:</strong> Complete at etravel.gov.ph.</p>
-        <p><strong>Cash:</strong> Island ATMs frequently run out.</p>
-      </div>
-      <button onclick="toggleModal('checklistModal')" class="w-full py-2 bg-slate-800 text-slate-200 text-xs rounded-lg">Close</button>
-    </div>
-  </div>
-
-  <script>
-    marked.use({ breaks: true, gfm: true });
-    
-    let currentMode = 'itinerary';
-    let selectedVibes = ['Pristine Beaches & Clear Water', 'Must-Try Food & Local Eats'];
-    let lastGeneratedRawText = '';
-    let currentDestinationName = '';
-    let toastTimeout; 
-    let chatHistory = []; // Multi-turn AI memory array
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const savedKey = localStorage.getItem('saantayo_gemini_key');
-      if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-      
-      // Initialize Flatpickr Date Range Calendar
-      flatpickr("#dateRange", {
-        mode: "range",
-        minDate: "today",
-        dateFormat: "M j, Y",
-        showMonths: window.innerWidth > 600 ? 2 : 1
-      });
-      
-      syncVibeButtons();
-      updateSavedBadge();
-    });
-
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      document.getElementById('toastMessage').innerText = msg;
-      toast.classList.remove('opacity-0', 'pointer-events-none');
-      clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
-    }
-
-    function toggleModal(id) {
-      const modal = document.getElementById(id);
-      modal.classList.toggle('hidden');
-      if (id === 'savedTripsModal' && !modal.classList.contains('hidden')) renderSavedTrips();
-    }
-
-    function saveApiKey() {
-      const key = document.getElementById('apiKeyInput').value.trim();
-      if (key) {
-        localStorage.setItem('saantayo_gemini_key', key);
-        toggleModal('settingsModal');
-        showToast('API Key saved securely!');
-      }
-    }
-
-    function setMode(mode) {
-      currentMode = mode;
-      const itinBtn = document.getElementById('modeItineraryBtn');
-      const compBtn = document.getElementById('modeCompareBtn');
-      if (mode === 'itinerary') {
-        itinBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm flex items-center justify-center gap-1.5';
-        compBtn.className = 'py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
-      } else {
-        compBtn.className = 'py-2 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 shadow-sm flex items-center justify-center gap-1.5';
-        itinBtn.className = 'py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
-      }
-    }
-
-    function toggleVibe(btn, vibe) {
-      if (selectedVibes.includes(vibe)) {
-        selectedVibes = selectedVibes.filter(v => v !== vibe);
-        btn.classList.remove('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
-        btn.classList.add('border-slate-700', 'bg-slate-950', 'text-slate-300');
-      } else {
-        selectedVibes.push(vibe);
-        btn.classList.remove('border-slate-700', 'bg-slate-950', 'text-slate-300');
-        btn.classList.add('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
-      }
-    }
-
-    function syncVibeButtons() {
-      document.querySelectorAll('.vibe-btn').forEach(btn => {
-        const text = btn.innerText;
-        if (selectedVibes.some(v => text.includes(v.split(' ')[0]))) {
-          btn.classList.add('border-cyan-500', 'bg-cyan-500/10', 'text-cyan-300');
-        } else {
-          btn.classList.add('border-slate-700', 'bg-slate-950', 'text-slate-300');
-        }
-      });
-    }
-
-    // AI Itinerary Generation
-    async function runAIResearch() {
-      const apiKey = localStorage.getItem('saantayo_gemini_key');
-      if (!apiKey) {
-        toggleModal('settingsModal');
-        showToast('Please save your API key first');
-        return;
-      }
-
-      currentDestinationName = document.getElementById('destination').value.trim() || "Philippine Trip";
-      const dates = document.getElementById('dateRange').value || "Flexible Dates";
-      const currency = document.getElementById('currencyPref').value;
-      const party = document.querySelector('input[name="party"]:checked').value;
-      
-      // Cost Controls
-      const bHotel = document.getElementById('budgetHotel').value || "Flexible";
-      const bTransit = document.getElementById('budgetTransit').value || "Flexible";
-      const bExcursion = document.getElementById('budgetExcursion').value || "Flexible";
-      const freeSight = document.getElementById('freeSightseeing').checked ? "Must prioritize free and $0 sightseeing options." : "";
-
-      document.getElementById('generateBtn').disabled = true;
-      document.getElementById('loadingStatus').classList.remove('hidden');
-      document.getElementById('resultsContainer').classList.add('hidden');
-
-      const systemInstruction = `You are SaanTayo, a specialized travel intelligence engine for Philippine travel. 
-Prioritize candid recommendations from local forums. Deliver hyper-realistic logistics (ferry times, ATM warnings, tricycle fares).
-Format output cleanly in Markdown. Quote budgets in ${currency}.`;
-
-      let userPrompt = `Generate a travel plan for ${currentDestinationName}.
-Dates: ${dates}. Party: ${party}.
-Constraints: Max Hotel: ${bHotel}/night. Total Transit: ${bTransit}. Total Excursions: ${bExcursion}.
-${freeSight}
-Priorities: ${selectedVibes.join(', ')}.
-
-Structure:
-1. Executive Overview & Routing
-2. Strict Budget Breakdown Table (respecting the limits set above)
-3. Day-by-Day Plan
-4. Local Transit & Survival Secrets`;
-
-      if (currentMode === 'compare') {
-        userPrompt = `Destination Showdown: ${currentDestinationName}. Dates: ${dates}. Constraints: Hotel: ${bHotel}/night, Transit: ${bTransit}, Excursions: ${bExcursion}. ${freeSight}. Build a scorecard table and pick a winner.`;
-      }
-
-      // 1. Setup Chat History for the Multi-Turn AI
-      chatHistory = [{ role: 'user', parts: [{ text: userPrompt }] }];
-
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: chatHistory,
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            tools: [{ googleSearch: {} }]
-          })
-        });
-
-        const data = await response.json();
-        
-        if (data.candidates) {
-          lastGeneratedRawText = data.candidates[0].content.parts[0].text;
-          
-          // 2. Save the AI's answer into the chat memory
-          chatHistory.push({ role: 'model', parts: [{ text: lastGeneratedRawText }] });
-
-          document.getElementById('renderedMarkdown').innerHTML = DOMPurify.sanitize(marked.parse(lastGeneratedRawText));
-          document.getElementById('resultMetaBadge').innerText = `${currentDestinationName}`;
-          document.getElementById('resultsContainer').classList.remove('hidden');
-          showToast('Plan generated successfully!');
-        } else {
-          alert("API Error: " + (data.error?.message || "Unknown error"));
-        }
-      } catch (err) {
-        alert("Network Error: " + err.message);
-      } finally {
-        document.getElementById('generateBtn').disabled = false;
-        document.getElementById('loadingStatus').classList.add('hidden');
-      }
-    }
-
-    // AI Multi-Turn Chat Assistant
-    async function sendChatMessage() {
-      const inputEl = document.getElementById('chatInput');
-      const msg = inputEl.value.trim();
-      if(!msg) return;
-
-      appendChatBubble('user', msg);
-      inputEl.value = '';
-      
-      // Add user follow-up question to the ongoing memory
-      chatHistory.push({ role: 'user', parts: [{ text: msg }] });
-      const loadingId = appendChatBubble('model', '<i class="fa-solid fa-ellipsis animate-pulse"></i> Thinking...');
-
-      try {
-        const apiKey = localStorage.getItem('saantayo_gemini_key');
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: chatHistory,
-            systemInstruction: { parts: [{ text: "You are SaanTayo. Answer follow-up questions about the travel plan strictly based on real logistics, Reddit tips, and TripAdvisor data." }] },
-            tools: [{ googleSearch: {} }]
-          })
-        });
-        
-        const data = await response.json();
-        const replyText = data.candidates[0].content.parts[0].text;
-        
-        // Save the AI's new reply to memory
-        chatHistory.push({ role: 'model', parts: [{ text: replyText }] });
-        document.getElementById(loadingId).innerHTML = DOMPurify.sanitize(marked.parse(replyText));
-        
-      } catch (e) {
-        document.getElementById(loadingId).innerText = "Connection error. Please try again.";
-      }
-    }
-
-    function appendChatBubble(role, htmlContent) {
-      const chatBox = document.getElementById('chatMessages');
-      const msgDiv = document.createElement('div');
-      const id = 'msg-' + Date.now();
-      msgDiv.id = id;
-      msgDiv.className = `p-3 text-xs w-[85%] shadow-sm prose prose-invert ${role === 'user' ? 'chat-bubble-user' : 'chat-bubble-model'}`;
-      msgDiv.innerHTML = htmlContent;
-      chatBox.appendChild(msgDiv);
-      chatBox.scrollTop = chatBox.scrollHeight;
-      return id;
-    }
-
-    // Utility: Save, Load, and Share Handlers
-    function saveCurrentPlan() {
-      if (!lastGeneratedRawText) return;
-      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
-      trips.unshift({ id: Date.now(), destination: currentDestinationName, date: new Date().toLocaleDateString('en-CA'), content: lastGeneratedRawText });
-      localStorage.setItem('saantayo_saved_trips', JSON.stringify(trips.slice(0, 15)));
-      updateSavedBadge();
-      showToast('Saved to offline storage!');
-    }
-
-    function updateSavedBadge() {
-      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
-      document.getElementById('savedCountBadge').innerText = trips.length;
-    }
-
-    function renderSavedTrips() {
-      const container = document.getElementById('savedTripsList');
-      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
-      if (trips.length === 0) { container.innerHTML = '<p class="text-slate-500 text-center py-6">No saved trips yet.</p>'; return; }
-      container.innerHTML = trips.map(t => `
-        <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
-          <div class="overflow-hidden"><h4 class="font-bold text-slate-200 truncate">${t.destination}</h4><p class="text-[10px] text-slate-500">${t.date}</p></div>
           <div class="flex items-center gap-1.5 shrink-0">
-            <button onclick="loadSavedTrip(${t.id})" class="px-2 py-1 bg-cyan-500/10 text-cyan-400 rounded-lg text-xs">Load</button>
-            <button onclick="deleteSavedTrip(${t.id})" class="p-1 text-slate-600 hover:text-rose-400 text-xs"><i class="fa-solid fa-trash"></i></button>
+            <button
+              id="savePlan"
+              aria-label="Save plan"
+              class="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-lg flex items-center gap-1"
+            >
+              <span aria-hidden="true">▣</span>
+              <span class="hidden sm:inline">Save</span>
+            </button>
+            <button
+              id="sharePlan"
+              aria-label="Share plan"
+              class="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-semibold rounded-lg flex items-center gap-1"
+            >
+              <span aria-hidden="true">↑</span>
+              <span class="hidden sm:inline">Share</span>
+            </button>
           </div>
         </div>
-      `).join('');
-    }
 
-    function loadSavedTrip(id) {
-      const trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
-      const trip = trips.find(t => t.id === id);
-      if (trip) {
-        lastGeneratedRawText = trip.content; currentDestinationName = trip.destination;
-        document.getElementById('renderedMarkdown').innerHTML = DOMPurify.sanitize(marked.parse(trip.content));
-        document.getElementById('resultMetaBadge').innerText = trip.destination;
-        document.getElementById('resultsContainer').classList.remove('hidden');
-        toggleModal('savedTripsModal'); showToast(`Loaded ${trip.destination}!`);
-      }
-    }
+        <p id="planTimestamp" class="muted"></p>
+        <!-- Rendered Markdown Content -->
+        <div
+          id="renderedMarkdown"
+          class="bg-slate-900 border border-slate-800 rounded-2xl p-5 prose prose-invert text-slate-200 text-sm max-w-none shadow-2xl leading-relaxed"
+        ></div>
 
-    function deleteSavedTrip(id) {
-      let trips = JSON.parse(localStorage.getItem('saantayo_saved_trips') || '[]');
-      localStorage.setItem('saantayo_saved_trips', JSON.stringify(trips.filter(t => t.id !== id)));
-      updateSavedBadge(); renderSavedTrips(); showToast('Trip deleted');
-    }
+        <section id="budgetSection" class="panel">
+          <h2>Trip estimate</h2>
+          <p class="muted">
+            PHP unit costs from the plan; totals calculated here. CAD uses a
+            dated reference rate, not an AI conversion.
+          </p>
+          <button id="calculateBudget" class="secondary" type="button">
+            Calculate itemized estimate
+          </button>
+          <p class="muted">
+            One extra AI extraction request. No additional search. Check
+            assumptions before relying on totals.
+          </p>
+          <div id="budgetOutput"></div>
+        </section>
+        <section class="panel">
+          <label for="travelNotes">Your travel notes</label
+          ><textarea
+            id="travelNotes"
+            rows="3"
+            maxlength="12000"
+            placeholder="Meeting points, booking reminders… Avoid passport numbers and secrets."
+          ></textarea>
+          <p class="muted">
+            Saved on this device when you tap Save. Notes are not sent to
+            Gemini.
+          </p>
+        </section>
+        <!-- AI Chat Assistant Box -->
+        <div
+          id="chatSection"
+          class="bg-slate-900 border border-slate-800 rounded-2xl flex flex-col h-[400px] overflow-hidden shadow-2xl"
+        >
+          <div
+            class="p-3 border-b border-slate-800 bg-slate-950 flex justify-between items-center"
+          >
+            <span
+              class="text-xs font-bold text-cyan-400 flex items-center gap-2"
+              ><span aria-hidden="true">✦</span> Ask SaanTayo Follow-Up
+              Questions</span
+            >
+          </div>
+          <div
+            id="chatMessages"
+            role="log"
+            aria-label="Follow-up conversation"
+            class="flex-1 overflow-y-auto p-4 space-y-4 text-sm flex flex-col"
+          >
+            <p class="muted">
+              Ask about this plan. Fresh research is available when needed.
+            </p>
+          </div>
+          <p
+            id="chatStatus"
+            role="status"
+            aria-live="polite"
+            class="muted px-3"
+          ></p>
+          <form
+            id="chatForm"
+            class="p-3 border-t border-slate-800 bg-slate-950 space-y-2"
+          >
+            <label for="chatGrounding">Follow-up sources</label
+            ><select id="chatGrounding">
+              <option value="auto">Auto · research if useful</option>
+              <option value="context">This plan only · no live tools</option>
+            </select>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                id="chatInput"
+                aria-label="Follow-up question"
+                maxlength="3000"
+                required
+                placeholder="e.g., Will the ferry be rough?"
+                class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500"
+              />
+              <button
+                id="sendChat"
+                type="submit"
+                aria-label="Send follow-up"
+                class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-bold transition-colors"
+              >
+                <span aria-hidden="true">↑</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
 
-    async function sharePlan() {
-      if (!navigator.share) return navigator.clipboard.writeText(lastGeneratedRawText), showToast('Copied to clipboard!');
-      try { await navigator.share({ title: `SaanTayo Plan`, text: lastGeneratedRawText.slice(0, 500) + "...\n(Generated via SaanTayo)", url: window.location.href }); } catch (e) {}
-    }
-  </script>
-</body>
+    <dialog id="settingsModal" aria-labelledby="aboutTitle">
+      <h2 id="aboutTitle">About your travel engine</h2>
+      <p>
+        Gemini 3.7 Flash researches with Google Search and Google Maps when
+        useful. Your prompts and relevant itinerary are sent through the server
+        to Google; do not include sensitive identity or payment information.
+      </p>
+      <p>
+        Plans and notes stay in this browser. They are not encrypted, synced or
+        backed up. Removing browser data removes them. Google retains paid
+        interactions for up to 55 days, subject to project settings.
+      </p>
+      <p>
+        Saved sourced answers are personal conversation history. Maps answers
+        expire after 175 days and cannot be exported. Search-only answers expire
+        after 700 days. Your notes and older legacy plans are kept.
+      </p>
+      <p>
+        No Gemini key belongs in this browser. If you used the old app, rotate
+        that key in Google AI Studio. Its old local copy is removed
+        automatically.
+      </p>
+      <p>
+        <a
+          href="https://ai.google.dev/gemini-api/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Google API terms</a
+        >
+        ·
+        <a
+          href="https://maps.google.com/help/terms_maps/"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Google Maps terms</a
+        >
+      </p>
+      <button data-close class="secondary">Close</button>
+    </dialog>
+    <dialog id="savedTripsModal" aria-labelledby="savedTitle">
+      <h2 id="savedTitle">
+        Saved trips <span class="muted">· this device</span>
+      </h2>
+      <div id="savedTripsList"></div>
+      <div class="flex flex-wrap gap-2">
+        <button id="exportTrips" class="secondary">Export eligible plans</button
+        ><label class="secondary" for="importTrips">Import plans</label
+        ><input
+          class="sr-only"
+          id="importTrips"
+          type="file"
+          accept=".json,application/json"
+        />
+      </div>
+      <p class="muted">
+        Export includes legacy/Search-only plans and your notes. Maps answers
+        stay in your personal history. Keep backups private.
+      </p>
+      <button data-close class="secondary">Close</button>
+    </dialog>
+    <dialog id="checklistModal" aria-labelledby="checklistTitle">
+      <h2 id="checklistTitle">Before you head out</h2>
+      <div id="checklistItems"></div>
+      <h3>Confirm close to departure</h3>
+      <p>
+        Entry rules depend on nationality and circumstances. Check
+        <a
+          href="https://immigration.gov.ph/"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Bureau of Immigration</a
+        >
+        and the official
+        <a
+          href="https://etravel.gov.ph/"
+          target="_blank"
+          rel="noopener noreferrer"
+          >eTravel portal</a
+        >. Use the operator’s official site for ferry schedules and weather
+        cancellations.
+      </p>
+      <p class="muted">
+        These links need internet. Checklist reminders remain available offline.
+      </p>
+      <button data-close class="secondary">Close</button>
+    </dialog>
+    <noscript
+      ><p class="notice">
+        SaanTayo needs JavaScript for saved trips and research. Enable it and
+        reload.
+      </p></noscript
+    >
+  </body>
 </html>
