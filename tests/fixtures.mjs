@@ -128,6 +128,7 @@ export const env = {
   GEMINI_API_KEY: "unit-test-only",
   CONVERSATION_SECRET: "unit-test-signing-secret-not-a-real-secret-12345",
   ALLOWED_ORIGINS: "https://geng-geng8.github.io",
+  ENABLE_GROUNDING: "true",
   AI_LIMITER: { limit: async () => ({ success: true }) },
 };
 export function apiRequest(path = "travel", body = {}, options = {}) {
