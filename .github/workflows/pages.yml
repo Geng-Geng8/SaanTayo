@@ -1,0 +1,42 @@
+name: Deploy static app to GitHub Pages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Require deployed backend URL
+        env:
+          SAANTAYO_API_BASE: ${{ vars.SAANTAYO_API_BASE }}
+        run: test -n "$SAANTAYO_API_BASE"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+        env:
+          SAANTAYO_API_BASE: ${{ vars.SAANTAYO_API_BASE }}
+      - run: pnpm check
+      - run: pnpm test
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - uses: actions/deploy-pages@v4
+        id: deployment

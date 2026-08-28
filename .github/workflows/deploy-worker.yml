@@ -1,0 +1,104 @@
+name: Deploy SaanTayo Worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - upgrade/gemini-3-7-travel-engine
+    paths:
+      - "server/**"
+      - "shared/**"
+      - "tests/**"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-worker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      CONVERSATION_SECRET: ${{ secrets.CONVERSATION_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm exec wrangler deploy --dry-run --outdir worker-build
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Check deployment secrets
+        id: secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID GEMINI_API_KEY CONVERSATION_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::notice::$name is not configured yet."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Validation passed. Worker deployment skipped until all four repository secrets are configured."
+          fi
+
+      - name: Validate conversation secret length
+        if: steps.secrets.outputs.ready == 'true'
+        shell: bash
+        run: |
+          if [ "${#CONVERSATION_SECRET}" -lt 32 ]; then
+            echo "CONVERSATION_SECRET must be at least 32 characters." >&2
+            exit 1
+          fi
+
+      - name: Initial Worker deploy
+        if: steps.secrets.outputs.ready == 'true'
+        run: pnpm exec wrangler deploy
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Set Gemini API key
+        if: steps.secrets.outputs.ready == 'true'
+        shell: bash
+        run: printf '%s' "$GEMINI_API_KEY" | pnpm exec wrangler secret put GEMINI_API_KEY
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Set conversation secret
+        if: steps.secrets.outputs.ready == 'true'
+        shell: bash
+        run: printf '%s' "$CONVERSATION_SECRET" | pnpm exec wrangler secret put CONVERSATION_SECRET
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Final Worker deploy
+        if: steps.secrets.outputs.ready == 'true'
+        run: pnpm exec wrangler deploy
+        env:
+          WRANGLER_SEND_METRICS: "false"
+
+      - name: Deployment summary
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          echo "Cloudflare Worker deployed from ${GITHUB_SHA}."
+          echo "Grounding remains disabled by wrangler.jsonc (ENABLE_GROUNDING=false)."
