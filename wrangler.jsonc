@@ -6,7 +6,7 @@
   "workers_dev": true,
   "vars": {
     "GEMINI_MODEL": "gemini-3.7-flash",
-    "ENABLE_GROUNDING": "false",
+    "ENABLE_GROUNDING": "true",
     "ALLOWED_ORIGINS": "https://geng-geng8.github.io",
   },
   "ratelimits": [
