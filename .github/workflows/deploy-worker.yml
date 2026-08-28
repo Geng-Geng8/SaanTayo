@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - upgrade/gemini-3-7-travel-engine
+      - main
     paths:
       - "server/**"
       - "shared/**"
@@ -101,4 +101,4 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         run: |
           echo "Cloudflare Worker deployed from ${GITHUB_SHA}."
-          echo "Grounding remains disabled by wrangler.jsonc (ENABLE_GROUNDING=false)."
+          echo "Grounding mode is configured by wrangler.jsonc."
