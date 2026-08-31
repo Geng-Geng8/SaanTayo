@@ -123,10 +123,12 @@ export function renderShortlistItem(item, { onDelete } = {}) {
     metaRow.append(locSpan);
   }
 
+  const savedByName = String(item.savedBy || "Glen");
+  const isAnne = savedByName.toLowerCase() === "anne";
   const userTag = el(
     "span",
-    `Saved by ${item.savedBy || "Glen"}`,
-    "shortlist-user-tag",
+    `Saved by ${savedByName}`,
+    `shortlist-user-tag ${isAnne ? "shortlist-user-anne" : "shortlist-user-glen"}`,
   );
   metaRow.append(userTag);
 
@@ -163,6 +165,81 @@ export function renderShortlistItem(item, { onDelete } = {}) {
   }
 
   row.append(content, delBtn);
+  return row;
+}
+
+export function renderSharedTripRow(trip, { onLoad, onDelete } = {}) {
+  const row = el("div", null, "saved-row shared-trip-row");
+  const text = el("div", null, "flex-1 min-w-0");
+
+  const titleRow = el("div", null, "flex items-center gap-2 flex-wrap");
+  const title = el(
+    "h3",
+    trip.destination || "Shared Trip",
+    "font-bold text-sm text-slate-100",
+  );
+  titleRow.append(title);
+
+  if (trip.itemCount !== undefined && trip.itemCount > 0) {
+    const countBadge = el(
+      "span",
+      `📌 ${trip.itemCount} ${trip.itemCount === 1 ? "item" : "items"}`,
+      "text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40",
+    );
+    titleRow.append(countBadge);
+  }
+
+  if (trip.hasTripData === false) {
+    const orphanBadge = el(
+      "span",
+      "Saved Items",
+      "text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30",
+    );
+    titleRow.append(orphanBadge);
+  }
+
+  let dateInfo = "";
+  if (trip.startDate && trip.endDate) {
+    dateInfo = `${trip.startDate} to ${trip.endDate}`;
+  } else if (trip.createdAt) {
+    dateInfo = trip.expired
+      ? "Sourced answer expired · notes kept"
+      : `Created ${trip.createdAt.slice(0, 10)}`;
+  } else {
+    dateInfo = "Shared travel workspace";
+  }
+
+  const sub = el("p", dateInfo, "muted text-xs mt-0.5");
+  text.append(titleRow, sub);
+
+  const actions = el("div", null, "flex items-center gap-2");
+  const loadBtn = el(
+    "button",
+    "Open",
+    "secondary font-bold text-xs py-1.5 px-3",
+  );
+  loadBtn.dataset.load = trip.tripId || trip.id;
+  if (onLoad) {
+    loadBtn.addEventListener("click", () => onLoad(trip));
+  }
+  actions.append(loadBtn);
+
+  if (onDelete && (trip.id || trip.tripId)) {
+    const removeBtn = el(
+      "button",
+      "Delete",
+      "secondary danger text-xs py-1.5 px-2.5",
+    );
+    removeBtn.dataset.delete = trip.tripId || trip.id;
+    removeBtn.setAttribute(
+      "aria-label",
+      `Delete ${trip.destination || "trip"} from this device`,
+    );
+    removeBtn.addEventListener("click", () => onDelete(trip));
+    actions.append(removeBtn);
+  }
+
+  row.append(text, actions);
   return row;
 }
 

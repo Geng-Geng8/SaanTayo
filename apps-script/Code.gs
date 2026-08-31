@@ -117,6 +117,11 @@ function doGet(e) {
   try {
     const params = (e && e.parameter) ? e.parameter : {};
     const action = String(params.action || "").trim();
+
+    if (action === "list_trips") {
+      return handleListTrips_();
+    }
+
     const tripId = normalizeId_(params.tripId);
 
     if (!tripId) {
@@ -153,6 +158,94 @@ function doGet(e) {
 /* =========================================================
    TRIPS
    ========================================================= */
+
+function handleListTrips_() {
+  const tripsSheet = getTripsSheet_();
+  const savedItemsSheet = getSavedItemsSheet_();
+
+  const tripsData = tripsSheet.getDataRange().getValues();
+  const savedItemsData = savedItemsSheet.getDataRange().getValues();
+
+  // 1. Count items per trip and record earliest timestamp & sample location
+  const itemsPerTrip = {};
+  const itemDatesPerTrip = {};
+  const itemSampleLocations = {};
+
+  if (savedItemsData.length > 1) {
+    for (let i = 1; i < savedItemsData.length; i++) {
+      const row = savedItemsData[i];
+      const tripId = String(row[1] || "").trim();
+      if (!tripId) continue;
+
+      itemsPerTrip[tripId] = (itemsPerTrip[tripId] || 0) + 1;
+      const createdAt = normalizeSheetDate_(row[2]);
+      if (createdAt && (!itemDatesPerTrip[tripId] || createdAt < itemDatesPerTrip[tripId])) {
+        itemDatesPerTrip[tripId] = createdAt;
+      }
+      const loc = String(row[5] || "").trim();
+      if (loc && !itemSampleLocations[tripId]) {
+        itemSampleLocations[tripId] = loc;
+      }
+    }
+  }
+
+  // 2. Process Trips sheet rows
+  const tripMap = {};
+
+  if (tripsData.length > 1) {
+    for (let i = 1; i < tripsData.length; i++) {
+      const row = tripsData[i];
+      const tripId = String(row[0] || "").trim();
+      if (!tripId) continue;
+
+      const createdAt = normalizeSheetDate_(row[1]);
+      const destination = String(row[2] || "").trim() || "Shared Trip";
+      const startDate = String(row[3] || "").trim();
+      const endDate = String(row[4] || "").trim();
+      const tripDataJSON = String(row[5] || "").trim();
+
+      tripMap[tripId] = {
+        tripId: tripId,
+        destination: destination,
+        startDate: startDate,
+        endDate: endDate,
+        createdAt: createdAt || new Date().toISOString(),
+        itemCount: itemsPerTrip[tripId] || 0,
+        hasTripData: !!tripDataJSON
+      };
+    }
+  }
+
+  // 3. Union with TripIDs discovered solely from SavedItems (orphans)
+  for (const tripId in itemsPerTrip) {
+    if (!tripMap[tripId]) {
+      const fallbackLoc = itemSampleLocations[tripId] || "Shared Trip";
+      tripMap[tripId] = {
+        tripId: tripId,
+        destination: fallbackLoc,
+        startDate: "",
+        endDate: "",
+        createdAt: itemDatesPerTrip[tripId] || new Date().toISOString(),
+        itemCount: itemsPerTrip[tripId],
+        hasTripData: false
+      };
+    }
+  }
+
+  const trips = Object.values(tripMap);
+
+  // Sort descending by createdAt (newest first)
+  trips.sort(function(a, b) {
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return db - da;
+  });
+
+  return jsonResponse_({
+    status: "success",
+    trips: trips
+  });
+}
 
 function handleSaveTrip_(payload) {
   const tripId = normalizeId_(payload.tripId);

@@ -1,5 +1,30 @@
 export const STORE_KEY = "saantayo_trips_v2",
-  LEGACY_KEY = "saantayo_saved_trips";
+  LEGACY_KEY = "saantayo_saved_trips",
+  PARTNER_STORAGE_KEY = "saantayo_partner_identity_v1";
+
+export function getPartnerIdentity(
+  storage = typeof localStorage !== "undefined" ? localStorage : null,
+) {
+  if (!storage) return "Glen";
+  try {
+    const val = storage.getItem(PARTNER_STORAGE_KEY);
+    if (val === "Glen" || val === "Anne") return val;
+  } catch {}
+  return "Glen";
+}
+
+export function setPartnerIdentity(
+  storage = typeof localStorage !== "undefined" ? localStorage : null,
+  identity = "Glen",
+) {
+  const norm = identity === "Anne" ? "Anne" : "Glen";
+  if (storage) {
+    try {
+      storage.setItem(PARTNER_STORAGE_KEY, norm);
+    } catch {}
+  }
+  return norm;
+}
 export function legacyTrip(value, index = 0) {
   if (
     !value ||

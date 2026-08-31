@@ -851,3 +851,156 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
 
   app.dom.window.close();
 });
+
+test("Partner Identity switching and saves attribution to Glen vs Anne", async () => {
+  let savedServerItems = [];
+  const app = await setup({
+    sheetsHandler: (reqUrl, options, { action, bodyObj }) => {
+      if (action === "save_item") {
+        savedServerItems.push(bodyObj);
+        return Response.json({
+          status: "success",
+          items: savedServerItems,
+        });
+      }
+      if (action === "get_items") {
+        return Response.json({
+          status: "success",
+          items: savedServerItems,
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  await app.generate();
+
+  // 1. Initial partner is Glen
+  assert.equal(app.$("currentPartnerLabel").textContent, "Glen");
+
+  // 2. Save an item as Glen
+  const stayPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".pin-btn");
+  stayPinBtns[0].click();
+  await tick();
+  await tick();
+
+  assert.equal(savedServerItems.length, 1);
+  assert.equal(savedServerItems[0].savedBy, "Glen");
+
+  // 3. Switch partner to Anne
+  app.$("selectAnneBtn").click();
+  await tick();
+  assert.equal(app.$("currentPartnerLabel").textContent, "Anne");
+
+  // 4. Save a dining item as Anne
+  const foodPinBtns = app.$("diningCardsGrid").querySelectorAll(".pin-btn");
+  foodPinBtns[0].click();
+  await tick();
+  await tick();
+
+  assert.equal(savedServerItems.length, 2);
+  assert.equal(savedServerItems[1].savedBy, "Anne");
+
+  // 5. Open shortlist and verify partner filter
+  app.$("openShortlistBtn").click();
+  await tick();
+  assert.equal(app.$("shortlistBadge").textContent, "2");
+
+  // Click Anne filter
+  const filterAnneBtn = app.dom.window.document.querySelector('[data-partner-filter="Anne"]');
+  filterAnneBtn.click();
+  await tick();
+  let visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(visible.length, 1);
+  assert.ok(visible[0].textContent.includes("Saved by Anne"));
+
+  // Click Glen filter
+  const filterGlenBtn = app.dom.window.document.querySelector('[data-partner-filter="Glen"]');
+  filterGlenBtn.click();
+  await tick();
+  visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(visible.length, 1);
+  assert.ok(visible[0].textContent.includes("Saved by Glen"));
+
+  // Click All filter
+  const filterAllBtn = app.dom.window.document.querySelector('[data-partner-filter="all"]');
+  filterAllBtn.click();
+  await tick();
+  visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(visible.length, 2);
+
+  app.dom.window.close();
+});
+
+test("Shared Trips discovery via list_trips action and opening orphan workspace", async () => {
+  const mockSharedTrips = [
+    {
+      tripId: "palawan-2026",
+      destination: "El Nido, Palawan",
+      startDate: "2026-09-10",
+      endDate: "2026-09-15",
+      createdAt: "2026-08-20T10:00:00Z",
+      itemCount: 5,
+      hasTripData: true,
+    },
+    {
+      tripId: "siargao-orphan",
+      destination: "Siargao Island",
+      startDate: "",
+      endDate: "",
+      createdAt: "2026-08-22T12:00:00Z",
+      itemCount: 2,
+      hasTripData: false,
+    },
+  ];
+
+  let listTripsCalled = false;
+  const app = await setup({
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "list_trips") {
+        listTripsCalled = true;
+        return Response.json({
+          status: "success",
+          trips: mockSharedTrips,
+        });
+      }
+      if (action === "get_items") {
+        return Response.json({
+          status: "success",
+          items: [
+            { itemId: "stay-1", name: "Kermit Surf Resort", itemType: "stay", savedBy: "Anne", price: "₱3,500" },
+            { itemId: "food-1", name: "Shaka Bowls", itemType: "food", savedBy: "Glen", price: "₱350" },
+          ],
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  // Open Shared Trips modal
+  const openSavedTripsBtn = app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]');
+  openSavedTripsBtn.click();
+  await tick();
+  await tick();
+
+  assert.ok(listTripsCalled);
+  assert.equal(app.$("savedCountBadge").textContent, "2");
+
+  const rows = app.$("savedTripsList").querySelectorAll(".shared-trip-row");
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0].textContent.includes("El Nido, Palawan"));
+  assert.ok(rows[0].textContent.includes("5 items"));
+  assert.ok(rows[1].textContent.includes("Siargao Island"));
+  assert.ok(rows[1].textContent.includes("Saved Items"));
+
+  // Click Open on the orphan trip (Siargao)
+  const openBtns = app.$("savedTripsList").querySelectorAll('[data-load]');
+  openBtns[1].click();
+  await tick();
+  await tick();
+
+  assert.match(app.$("renderedMarkdown").textContent, /Siargao Island/);
+  assert.equal(app.$("shortlistBadge").textContent, "2");
+
+  app.dom.window.close();
+});

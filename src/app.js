@@ -19,6 +19,9 @@ import {
   buildActivitySearchLink,
   canonicalizeSavedItem,
   normalizeSavedItems,
+  PARTNERS,
+  PARTNER_STORAGE_KEY,
+  normalizePartnerIdentity,
 } from "../shared/travel.js";
 import {
   readTrips,
@@ -27,6 +30,8 @@ import {
   expireHistory,
   exportEligible,
   importTripsData,
+  getPartnerIdentity,
+  setPartnerIdentity,
 } from "./storage.js";
 import {
   el,
@@ -34,6 +39,7 @@ import {
   renderAnswer,
   renderProviderCard,
   renderShortlistItem,
+  renderSharedTripRow,
   renderTransitCard,
   renderTransitLinkButton,
   renderDiningCard,
@@ -47,6 +53,11 @@ const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
+  activePartnerFilter = "all",
+  sharedTrips = [],
+  isLoadingSharedTrips = false,
+  isRefreshingItems = false,
+  lastAutoRefresh = 0,
   current = null,
   savedItems = [],
   pinnedStays = savedItems,
@@ -82,7 +93,9 @@ function readAll() {
   }
 }
 function badge() {
-  $("savedCountBadge").textContent = readAll().length;
+  const count = sharedTrips.length || readAll().length;
+  const badgeEl = $("savedCountBadge");
+  if (badgeEl) badgeEl.textContent = String(count);
 }
 function setBusy(busy, message = "Researching your trip…") {
   $("loadingStatus").classList.toggle("hidden", !busy);
@@ -650,13 +663,16 @@ async function saveItem(rawItem) {
   if (!current) current = {};
   if (!current.id) current.id = crypto.randomUUID();
   const tripId = current.id;
+  const partner = getPartnerIdentity(localStorage) || "Glen";
   const canonical = canonicalizeSavedItem(
     {
       ...rawItem,
       tripId,
       itemId: rawItem.itemId || rawItem.stayId || crypto.randomUUID(),
+      savedBy: rawItem.savedBy || partner,
     },
     tripId,
+    partner,
   );
 
   // Optimistic local update
@@ -890,20 +906,46 @@ function renderShortlist({ isLoading = false } = {}) {
     container.append(
       el(
         "p",
-        "No saved items yet. Tap 📌 Pin / Save on any stay, food spot, or transit route.",
+        "No saved items yet. Tap 📌 Pin / Save on any stay, food spot, activity, or transit route.",
         "muted text-xs py-4 text-center",
       ),
     );
     return;
   }
 
-  for (const item of savedItems) {
+  const visibleItems =
+    activePartnerFilter === "all"
+      ? savedItems
+      : savedItems.filter(
+          (item) =>
+            (item.savedBy || "Glen").toLowerCase() ===
+            activePartnerFilter.toLowerCase(),
+        );
+
+  if (!visibleItems.length) {
+    container.append(
+      el(
+        "p",
+        `No saved items attributed to ${activePartnerFilter} yet.`,
+        "muted text-xs py-4 text-center",
+      ),
+    );
+    return;
+  }
+
+  for (const item of visibleItems) {
     container.append(renderShortlistItem(item, { onDelete: deleteItem }));
   }
 }
+
 async function loadSavedItemsFromSheets(tripId) {
   if (!tripId) return null;
+  if (isRefreshingItems) return savedItems;
+  isRefreshingItems = true;
   try {
+    const statusEl = $("shortlistSyncStatus");
+    if (statusEl) statusEl.textContent = "Refreshing shared items…";
+
     let res = null;
     try {
       res = await fetchSheetsApi(
@@ -947,38 +989,22 @@ async function loadSavedItemsFromSheets(tripId) {
       renderDining();
       renderActivities();
       renderTransit();
+      if (statusEl) statusEl.textContent = "Synced just now";
       return savedItems;
     }
   } catch (err) {
     console.warn("Could not load saved items from Sheets:", err);
+    const statusEl = $("shortlistSyncStatus");
+    if (statusEl) statusEl.textContent = "Offline · showing cached items";
+  } finally {
+    isRefreshingItems = false;
   }
   return null;
 }
 const loadStaysFromSheets = loadSavedItemsFromSheets;
 
-async function loadTripFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const tripId = params.get("trip");
+async function loadTripFromSheets(tripId) {
   if (!tripId) return;
-
-  // 1. Check local cache first so user sees immediate data if offline or fast-boot
-  let cachedTrip = null;
-  try {
-    const allLocal = readTrips(localStorage);
-    cachedTrip = allLocal.find((t) => t.id === tripId) || null;
-  } catch {}
-
-  if (cachedTrip) {
-    current = expireHistory(cachedTrip).trip;
-    syncSavedItemsState(
-      current.savedItems || current.stays || cachedTrip.savedItems || cachedTrip.stays || [],
-    );
-    showCurrent();
-    renderShortlist();
-  } else {
-    renderShortlist({ isLoading: true });
-  }
-
   $("connectionStatus").textContent = "Loading shared trip from Google Sheets…";
   let remoteLoaded = false;
   try {
@@ -1020,7 +1046,7 @@ async function loadTripFromUrl() {
         showCurrent();
         renderShortlist();
         toast("Trip itinerary hydrated from Google Sheets.");
-        $("resultsContainer").scrollIntoView({ behavior: "smooth" });
+        $("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
         remoteLoaded = true;
       }
     }
@@ -1030,88 +1056,180 @@ async function loadTripFromUrl() {
 
   const remoteItems = await loadSavedItemsFromSheets(tripId);
   if (remoteItems === null && !remoteLoaded) {
-    if (cachedTrip) {
-      syncSavedItemsState(
-        cachedTrip.savedItems || cachedTrip.stays || current?.savedItems || current?.stays || [],
-      );
-      renderShortlist();
-      renderAccommodations();
-      renderDining();
-      renderActivities();
-      renderTransit();
-      $("connectionStatus").textContent =
-        "Offline · showing cached trip and saved items.";
-    }
+    $("connectionStatus").textContent =
+      "Offline · showing cached trip and saved items.";
   }
 }
+
+async function loadTripFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const tripId = params.get("trip");
+  if (!tripId) return;
+
+  // 1. Check local cache first so user sees immediate data if offline or fast-boot
+  let cachedTrip = null;
+  try {
+    const allLocal = readTrips(localStorage);
+    cachedTrip = allLocal.find((t) => t.id === tripId) || null;
+  } catch {}
+
+  if (cachedTrip) {
+    current = expireHistory(cachedTrip).trip;
+    syncSavedItemsState(
+      current.savedItems || current.stays || cachedTrip.savedItems || cachedTrip.stays || [],
+    );
+    showCurrent();
+    renderShortlist();
+  } else {
+    renderShortlist({ isLoading: true });
+  }
+
+  await loadTripFromSheets(tripId);
+}
+
+async function loadSharedTripsFromSheets({ showToast = false } = {}) {
+  if (isLoadingSharedTrips) return sharedTrips;
+  isLoadingSharedTrips = true;
+  try {
+    const res = await fetchSheetsApi(
+      { action: "list_trips" },
+      { method: "GET" },
+    );
+    if (res?.status === "success" && Array.isArray(res?.trips)) {
+      sharedTrips = res.trips;
+      badge();
+      renderSaved();
+      if (showToast) toast("Shared trips refreshed from Google Sheets.");
+      return sharedTrips;
+    }
+  } catch (err) {
+    console.warn("Could not load shared trips from Sheets:", err);
+    renderSaved();
+  } finally {
+    isLoadingSharedTrips = false;
+  }
+  return null;
+}
+
 function renderSaved() {
   const box = $("savedTripsList");
+  if (!box) return;
   box.replaceChildren();
+
+  if (sharedTrips && sharedTrips.length) {
+    for (const trip of sharedTrips) {
+      box.append(
+        renderSharedTripRow(trip, {
+          onLoad: (t) => openSharedTrip(t),
+          onDelete: (t) => deleteSharedTrip(t),
+        }),
+      );
+    }
+    return;
+  }
+
   const trips = readAll();
-  if (!trips.length)
+  if (!trips.length) {
     box.append(
-      el("p", "No saved trips yet. Generate a plan, then tap Save.", "muted"),
-    );
-  for (const trip of trips) {
-    const row = el("div", null, "saved-row"),
-      text = el("div");
-    text.append(
-      el("h3", trip.destination),
       el(
         "p",
-        trip.expired
-          ? "Sourced answer expired · notes kept"
-          : trip.createdAt?.slice(0, 10),
-        "muted",
+        "No shared trips yet. Generate a plan, then tap Save.",
+        "muted text-xs py-4 text-center",
       ),
     );
-    const load = el("button", "Open", "secondary");
-    load.dataset.load = trip.id;
-    load.disabled = !!controller;
-    load.addEventListener("click", () => {
-      if (controller) return;
-      if (
-        current &&
-        $("travelNotes").value !== current.notes &&
-        !confirm("Leave unsaved notes? Tap Cancel, then Save to keep them.")
-      )
-        return;
-      current = expireHistory(trip).trip;
-      syncSavedItemsState(current.savedItems || current.stays || []);
-      $("savedTripsModal").close();
-      showCurrent();
-      renderShortlist();
-      if (current.id) {
-        loadSavedItemsFromSheets(current.id);
-      }
-      if (current.trip?.currency !== "PHP") refreshFx();
-      $("resultsContainer").scrollIntoView({ behavior: "smooth" });
-    });
-    const remove = el("button", "Delete", "secondary danger");
-    remove.dataset.delete = trip.id;
-    remove.disabled = !!controller;
-    remove.setAttribute("aria-label", `Delete ${trip.destination}`);
-    remove.addEventListener("click", () => {
-      if (
-        !confirm(
-          `Delete “${trip.destination}” from this device? An exported backup can restore eligible content.`,
-        )
-      )
-        return;
-      try {
-        writeTrips(
-          localStorage,
-          readTrips(localStorage).filter((t) => t.id !== trip.id),
-        );
-        badge();
-        renderSaved();
-        toast("Trip removed from this device. Existing backups are unchanged.");
-      } catch (e) {
-        storageError(e);
-      }
-    });
-    row.append(text, load, remove);
-    box.append(row);
+    return;
+  }
+
+  for (const trip of trips) {
+    box.append(
+      renderSharedTripRow(trip, {
+        onLoad: (t) => openSharedTrip(t),
+        onDelete: (t) => deleteSharedTrip(t),
+      }),
+    );
+  }
+}
+
+async function openSharedTrip(trip) {
+  if (controller) return;
+  if (
+    current &&
+    $("travelNotes").value !== current.notes &&
+    !confirm("Leave unsaved notes? Tap Cancel, then Save to keep them.")
+  )
+    return;
+
+  $("savedTripsModal")?.close();
+
+  const tripId = trip.tripId || trip.id;
+
+  // If orphan saved items (no TripDataJSON)
+  if (trip.hasTripData === false) {
+    const dest = trip.destination || "Shared Trip";
+    current = {
+      id: tripId,
+      destination: dest,
+      trip: {
+        destination: dest,
+        mode: "itinerary",
+        days: 1,
+        people: 2,
+      },
+      result: null,
+      content: `### Shared Workspace for ${dest}\n\nThis shared workspace contains pinned items (stays, food spots, activities, and transit legs) synced via Google Sheets.`,
+      notes: "",
+      chat: [],
+      savedItems: [],
+    };
+    showCurrent();
+    renderShortlist({ isLoading: true });
+    $("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
+    await loadSavedItemsFromSheets(tripId);
+    toast(`Opened workspace for "${dest}".`);
+    return;
+  }
+
+  let cachedTrip = null;
+  try {
+    const allLocal = readTrips(localStorage);
+    cachedTrip = allLocal.find((t) => t.id === tripId) || null;
+  } catch {}
+
+  if (cachedTrip) {
+    current = expireHistory(cachedTrip).trip;
+    syncSavedItemsState(
+      current.savedItems || current.stays || cachedTrip.savedItems || cachedTrip.stays || [],
+    );
+    showCurrent();
+    renderShortlist();
+    $("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
+  } else {
+    renderShortlist({ isLoading: true });
+  }
+
+  await loadTripFromSheets(tripId);
+}
+
+function deleteSharedTrip(trip) {
+  const tripId = trip.tripId || trip.id;
+  const dest = trip.destination || "trip";
+  if (
+    !confirm(
+      `Delete “${dest}” from this device? (Shared Google Sheets items remain intact).`,
+    )
+  )
+    return;
+  try {
+    writeTrips(
+      localStorage,
+      readTrips(localStorage).filter((t) => t.id !== tripId),
+    );
+    sharedTrips = sharedTrips.filter((t) => (t.tripId || t.id) !== tripId);
+    badge();
+    renderSaved();
+    toast("Trip removed from this device. Existing backups are unchanged.");
+  } catch (e) {
+    storageError(e);
   }
 }
 function download(name, data) {
@@ -1457,6 +1575,35 @@ async function connection() {
   }
   setBusy(!!controller);
 }
+function updatePartnerIdentityUI() {
+  const partner = getPartnerIdentity(localStorage) || "Glen";
+  const label = $("currentPartnerLabel");
+  if (label) label.textContent = partner;
+
+  const glenBtn = $("selectGlenBtn");
+  const anneBtn = $("selectAnneBtn");
+  if (glenBtn && anneBtn) {
+    glenBtn.classList.toggle("ring-2", partner === "Glen");
+    glenBtn.classList.toggle("ring-cyan-400", partner === "Glen");
+    anneBtn.classList.toggle("ring-2", partner === "Anne");
+    anneBtn.classList.toggle("ring-pink-400", partner === "Anne");
+  }
+}
+
+function switchPartner(identity) {
+  const norm = setPartnerIdentity(localStorage, identity);
+  updatePartnerIdentityUI();
+  toast(`Active partner set to ${norm}.`);
+}
+
+function triggerAutoRefresh(reason = "auto") {
+  if (!current?.id || isRefreshingItems) return;
+  const now = Date.now();
+  if (reason !== "manual" && now - lastAutoRefresh < 8000) return;
+  lastAutoRefresh = now;
+  loadSavedItemsFromSheets(current.id);
+}
+
 try {
   localStorage.removeItem("saantayo_gemini_key");
   const trips = readTrips(localStorage),
@@ -1471,12 +1618,70 @@ try {
 }
 setMode("itinerary");
 syncVibes();
+updatePartnerIdentityUI();
 badge();
 renderShortlist();
 loadTripFromUrl();
 connection();
+
+$("selectGlenBtn")?.addEventListener("click", () => switchPartner("Glen"));
+$("selectAnneBtn")?.addEventListener("click", () => switchPartner("Anne"));
+$("partnerToggleBtn")?.addEventListener("click", () => {
+  const currentPartner = getPartnerIdentity(localStorage) || "Glen";
+  const next = currentPartner === "Glen" ? "Anne" : "Glen";
+  switchPartner(next);
+});
+
+$("refreshSharedTripsBtn")?.addEventListener("click", () => {
+  loadSharedTripsFromSheets({ showToast: true });
+});
+
+document.querySelectorAll('[data-dialog="savedTripsModal"]').forEach((btn) => {
+  btn.addEventListener("click", () => {
+    loadSharedTripsFromSheets();
+  });
+});
+
+document.querySelectorAll('[data-dialog="shortlistModal"]').forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (current?.id) triggerAutoRefresh("manual");
+  });
+});
+
+document.querySelectorAll("[data-partner-filter]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    activePartnerFilter = btn.dataset.partnerFilter || "all";
+    document.querySelectorAll("[data-partner-filter]").forEach((b) => {
+      const isSelected = b.dataset.partnerFilter === activePartnerFilter;
+      b.classList.toggle("bg-cyan-500", isSelected);
+      b.classList.toggle("text-slate-950", isSelected);
+      b.classList.toggle("bg-slate-800", !isSelected);
+      b.classList.toggle("text-slate-400", !isSelected);
+    });
+    renderShortlist();
+  });
+});
+
 window.addEventListener("online", connection);
 window.addEventListener("offline", connection);
+window.addEventListener("focus", () => triggerAutoRefresh("focus"));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    triggerAutoRefresh("visibility");
+  }
+});
+
+setInterval(() => {
+  if (
+    current?.id &&
+    typeof document !== "undefined" &&
+    document.visibilityState === "visible" &&
+    (typeof navigator === "undefined" || navigator.onLine !== false)
+  ) {
+    triggerAutoRefresh("poll");
+  }
+}, 50000);
+
 window.addEventListener("beforeunload", (event) => {
   if (current && $("travelNotes").value !== current.notes) {
     event.preventDefault();
