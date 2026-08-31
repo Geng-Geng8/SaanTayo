@@ -582,6 +582,8 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
       itemType = "food";
     } else if (raw.route || raw.mode || raw.fare) {
       itemType = "transport";
+    } else if (raw.bestFor || raw.duration || raw.bookingTip || raw.activityName) {
+      itemType = "activity";
     } else {
       itemType = "stay";
     }
@@ -593,6 +595,7 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
       raw.hotelName ||
       raw.HotelName ||
       raw.spotName ||
+      raw.activityName ||
       raw.route ||
       raw.title ||
       "Saved Item",
@@ -611,12 +614,15 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
         ? "Hotel"
         : itemType === "food"
           ? "Restaurant"
-          : "Transit"),
+          : itemType === "activity"
+            ? "Activity"
+            : "Transit"),
   );
 
   const price = String(
     raw.price ||
       raw.Price ||
+      raw.estimatedPrice ||
       raw.estimatedPricePHP ||
       raw.estimatedCostPHP ||
       raw.estimatedFarePHP ||
@@ -645,6 +651,9 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
     if (raw.localTip) details.localTip = raw.localTip;
     if (raw.origin) details.origin = raw.origin;
     if (raw.destination) details.destination = raw.destination;
+    if (raw.bestFor) details.bestFor = raw.bestFor;
+    if (raw.duration) details.duration = raw.duration;
+    if (raw.bookingTip) details.bookingTip = raw.bookingTip;
   }
 
   const itemObj = {
@@ -1148,6 +1157,130 @@ export function parseAccommodations(
         isFallback: true,
       },
     );
+  }
+
+  return result;
+}
+
+export const ACTIVITY_CATEGORIES = [
+  "Island Hopping",
+  "Beach",
+  "Snorkeling",
+  "Diving",
+  "Hiking",
+  "Nature",
+  "Museum",
+  "Heritage",
+  "Cultural Attraction",
+  "Market",
+  "Food Experience",
+  "Nightlife",
+  "Family Attraction",
+  "Wellness",
+  "Day Trip",
+  "Tour",
+  "Adventure",
+];
+
+export function buildActivitySearchLink(name, location) {
+  const query = `${name || ""} ${location || ""}`.trim();
+  if (!query) return null;
+  return safeUrl(
+    `https://www.google.com/search?q=${encodeURIComponent(query + " tour booking ticket")}`,
+  );
+}
+
+export function stripActivitiesBlock(text) {
+  if (typeof text !== "string") return "";
+  return text
+    .replace(/```(?:activities|json:activities)[\s\S]*?```/gi, "")
+    .trim();
+}
+
+export function parseActivities(
+  text,
+  { destination = "Local Destination" } = {},
+) {
+  const result = [];
+  if (typeof text === "string" && text) {
+    const match =
+      text.match(/```(?:activities|json:activities)\s*([\s\S]*?)\s*```/i) ||
+      text.match(/```json\s*(\[\s*\{[\s\S]*?"bestFor"[\s\S]*?\}\s*\])\s*```/i) ||
+      text.match(/\[\s*\{[\s\S]*?"name"[\s\S]*?"duration"[\s\S]*?\}\s*\]/i);
+
+    if (match) {
+      try {
+        const rawJson = JSON.parse(match[1] || match[0]);
+        if (Array.isArray(rawJson)) {
+          for (const item of rawJson) {
+            if (item && typeof item === "object") {
+              const name =
+                textValue(
+                  item.name || item.activityName,
+                  "Activity name",
+                  150,
+                  true,
+                ) || "Curated Experience";
+              const location =
+                textValue(item.location, "Location", 150, true) || destination;
+              const rawCat = String(item.category || "").trim();
+              const matchedCat =
+                ACTIVITY_CATEGORIES.find(
+                  (c) => c.toLowerCase() === rawCat.toLowerCase(),
+                ) ||
+                rawCat ||
+                "Activity";
+
+              result.push({
+                name,
+                location,
+                category: matchedCat,
+                description:
+                  textValue(item.description, "Description", 400, true) ||
+                  "A celebrated local adventure and experience.",
+                estimatedPrice:
+                  textValue(
+                    item.estimatedPrice || item.estimatedPricePHP,
+                    "Estimated price",
+                    100,
+                    true,
+                  ) || "Check ticket prices",
+                bestFor:
+                  textValue(item.bestFor, "Best for", 150, true) ||
+                  "All travelers",
+                duration:
+                  textValue(item.duration, "Duration", 100, true) ||
+                  "Flexible",
+                bookingTip:
+                  textValue(item.bookingTip, "Booking tip", 250, true) ||
+                  "Book in advance or inquire with local tour operators.",
+                link:
+                  safeUrl(item.link) ||
+                  buildActivitySearchLink(name, location),
+              });
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  if (!result.length) {
+    const dest = (destination || "Local Area").trim();
+    result.push({
+      name: `Things to Do in ${dest}`,
+      location: dest,
+      category: "Activity",
+      description:
+        "Browse current attractions, cultural sites, and local experiences for this destination.",
+      estimatedPrice: "Check current prices",
+      bestFor: "All travelers",
+      duration: "Varies",
+      bookingTip:
+        "Confirm current hours, availability, prices, and local conditions before booking.",
+      link: buildActivitySearchLink(`things to do in ${dest}`, dest),
+      isFallback: true,
+    });
   }
 
   return result;
