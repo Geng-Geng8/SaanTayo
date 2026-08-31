@@ -541,11 +541,22 @@ export function sanitizeSheetsPayload(payload) {
   if (typeof payload === "object") {
     const sanitized = {};
     for (const [key, val] of Object.entries(payload)) {
-      sanitized[key] = sanitizeSheetsPayload(val);
+sanitized[key] = sanitizeSheetsPayload(val);
     }
     return sanitized;
   }
   return payload;
+}
+export const PARTNERS = ["Glen", "Anne"];
+export const PARTNER_STORAGE_KEY = "saantayo_partner_identity_v1";
+
+export function normalizePartnerIdentity(val, fallback = "Glen") {
+  if (typeof val === "string") {
+    const trimmed = val.trim();
+    if (trimmed.toLowerCase() === "anne") return "Anne";
+    if (trimmed.toLowerCase() === "glen") return "Glen";
+  }
+  return fallback;
 }
 
 export const ITEM_TYPES = [
@@ -557,7 +568,11 @@ export const ITEM_TYPES = [
   "note",
 ];
 
-export function canonicalizeSavedItem(raw, fallbackTripId = "") {
+export function canonicalizeSavedItem(
+  raw,
+  fallbackTripId = "",
+  fallbackSavedBy = "Glen",
+) {
   if (!raw || typeof raw !== "object") return null;
 
   const itemId = String(
@@ -633,7 +648,9 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
   const link =
     raw.link || raw.Link || raw.url || raw.searchUrl || raw.mapsUrl || "";
 
-  const savedBy = String(raw.savedBy || raw.SavedBy || "Glen");
+  const savedBy = String(
+    raw.savedBy || raw.SavedBy || fallbackSavedBy || "Glen",
+  );
   const status = String(raw.status || raw.Status || "Shortlisted");
 
   let details = {};
@@ -672,26 +689,26 @@ export function canonicalizeSavedItem(raw, fallbackTripId = "") {
   };
 
   // Backward compatibility accessors for existing stay consumers
-  Object.defineProperty(itemObj, "stayId", {
-    get() {
-      return this.itemId;
-    },
-    enumerable: true,
-  });
-  Object.defineProperty(itemObj, "hotelName", {
-    get() {
-      return this.name;
-    },
-    enumerable: true,
-  });
+  itemObj.stayId = itemId;
+  itemObj.hotelName = name;
+  itemObj.neighborhood = location;
+  itemObj.type = category;
+  itemObj.estimatedPricePHP = price;
+  itemObj.searchUrl = itemObj.link;
 
   return itemObj;
 }
 
-export function normalizeSavedItems(rawItems, fallbackTripId = "") {
-  if (!Array.isArray(rawItems)) return [];
-  return rawItems
-    .map((item) => canonicalizeSavedItem(item, fallbackTripId))
+export function normalizeSavedItems(
+  rawList,
+  fallbackTripId = "",
+  fallbackSavedBy = "Glen",
+) {
+  if (!Array.isArray(rawList)) return [];
+  return rawList
+    .map((item) =>
+      canonicalizeSavedItem(item, fallbackTripId, fallbackSavedBy),
+    )
     .filter(Boolean);
 }
 

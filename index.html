@@ -69,6 +69,16 @@
       </div>
       <div class="flex items-center gap-1.5 sm:gap-2">
         <button
+          id="partnerToggleBtn"
+          type="button"
+          data-dialog="partnerModal"
+          aria-label="Switch partner identity"
+          class="px-2 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+        >
+          <span aria-hidden="true">👤</span>
+          <span id="currentPartnerLabel" class="font-bold text-cyan-300">Select</span>
+        </button>
+        <button
           id="openShortlistBtn"
           data-dialog="shortlistModal"
           aria-label="Pinned stays shortlist"
@@ -84,7 +94,7 @@
         </button>
         <button
           data-dialog="savedTripsModal"
-          aria-label="Saved trips"
+          aria-label="Shared trips"
           class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
         >
           <span aria-hidden="true">▣</span>
@@ -845,14 +855,69 @@
       </p>
       <button data-close class="secondary">Close</button>
     </dialog>
-    <dialog id="savedTripsModal" aria-labelledby="savedTitle">
-      <h2 id="savedTitle">
-        Saved trips <span class="muted">· this device</span>
-      </h2>
-      <div id="savedTripsList"></div>
-      <div class="flex flex-wrap gap-2">
-        <button id="exportTrips" class="secondary">Export eligible plans</button
-        ><label class="secondary" for="importTrips">Import plans</label
+    <dialog id="partnerModal" aria-labelledby="partnerModalTitle" class="shortlist-drawer">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="text-base" aria-hidden="true">👤</span>
+          <h2 id="partnerModalTitle">Who's using this device?</h2>
+        </div>
+        <button data-close aria-label="Close partner selector" class="secondary text-xs">✕</button>
+      </div>
+      <p class="muted">
+        Select your identity for this browser. New saved items (stays, dining spots, activities, transit) will be attributed to you on the shared sheet.
+      </p>
+      <div class="grid grid-cols-2 gap-3 my-4">
+        <button
+          type="button"
+          id="selectGlenBtn"
+          class="p-4 rounded-xl border border-cyan-500/40 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-200 font-bold text-center flex flex-col items-center gap-2 transition-all cursor-pointer"
+        >
+          <span class="text-2xl">🍁</span>
+          <span>Glen</span>
+          <span class="text-[10px] font-normal text-cyan-400">Canada Base</span>
+        </button>
+        <button
+          type="button"
+          id="selectAnneBtn"
+          class="p-4 rounded-xl border border-pink-500/40 bg-pink-950/60 hover:bg-pink-900 text-pink-200 font-bold text-center flex flex-col items-center gap-2 transition-all cursor-pointer"
+        >
+          <span class="text-2xl">🌺</span>
+          <span>Anne</span>
+          <span class="text-[10px] font-normal text-pink-400">Philippines Base</span>
+        </button>
+      </div>
+      <div class="pt-2 border-t border-slate-800 flex justify-end">
+        <button data-close class="secondary text-xs py-1.5 px-4">Done</button>
+      </div>
+    </dialog>
+    <dialog id="savedTripsModal" aria-labelledby="savedTitle" class="shortlist-drawer">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="text-base" aria-hidden="true">▣</span>
+          <h2 id="savedTitle" class="font-bold text-sm">
+            Shared Trips <span class="muted font-normal text-xs">· SaanTayo Workspace</span>
+          </h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="refreshSharedTripsBtn"
+            class="secondary text-xs py-1 px-2.5 flex items-center gap-1 cursor-pointer"
+            title="Refresh trips from Google Sheets"
+          >
+            <span aria-hidden="true">🔄</span>
+            <span>Refresh</span>
+          </button>
+          <button data-close aria-label="Close shared trips" class="secondary text-xs">✕</button>
+        </div>
+      </div>
+      <p class="muted text-xs my-2">
+        Authoritative trip workspaces synchronized between Glen and Anne via Google Sheets.
+      </p>
+      <div id="savedTripsList" class="space-y-2.5 my-3 min-h-[80px]"></div>
+      <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-800">
+        <button id="exportTrips" class="secondary text-xs">Export eligible plans</button
+        ><label class="secondary text-xs" for="importTrips">Import plans</label
         ><input
           class="sr-only"
           id="importTrips"
@@ -860,29 +925,37 @@
           accept=".json,application/json"
         />
       </div>
-      <p class="muted">
-        Export includes legacy/Search-only plans and your notes. Maps answers
-        stay in your personal history. Keep backups private.
+      <p class="muted text-[11px] mt-2">
+        Export includes legacy/Search-only plans and notes. Maps answers stay in your personal history.
       </p>
-      <button data-close class="secondary">Close</button>
     </dialog>
     <dialog id="shortlistModal" aria-labelledby="shortlistTitle" class="shortlist-drawer">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
           <span class="text-base" aria-hidden="true">📌</span>
-          <h2 id="shortlistTitle">Pinned Stays Shortlist</h2>
+          <h2 id="shortlistTitle">Shared Shortlist</h2>
         </div>
         <button data-close aria-label="Close shortlist" class="secondary text-xs">✕</button>
       </div>
       <p class="muted">
-        Collaborative shortlist synced with Google Sheets. Pin accommodations or add specific hotels to compare with your group.
+        Collaborative shortlist synced with Google Sheets. Pin accommodations, dining spots, activities, or transit legs.
       </p>
+
+      <!-- Partner Filter Toolbar (Display-only) -->
+      <div class="flex items-center justify-between gap-2 my-2 py-1.5 px-2.5 bg-slate-950/80 border border-slate-800 rounded-lg">
+        <span class="text-[11px] font-semibold text-slate-400">Filter by partner:</span>
+        <div id="shortlistPartnerFilter" class="flex gap-1">
+          <button type="button" data-partner-filter="all" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500 text-slate-950 transition-colors cursor-pointer">All</button>
+          <button type="button" data-partner-filter="Glen" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">Glen</button>
+          <button type="button" data-partner-filter="Anne" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer">Anne</button>
+        </div>
+      </div>
 
       <!-- Add Stay Toggle Button -->
       <button
         type="button"
         id="toggleAddStayBtn"
-        class="w-full py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all mt-3 mb-2"
+        class="w-full py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all mt-2 mb-2"
       >
         <span aria-hidden="true">＋</span> Add Specific Stay
       </button>

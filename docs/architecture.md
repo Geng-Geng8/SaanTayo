@@ -77,11 +77,31 @@ It supports operations including:
 
 * `save_trip`
 * `get_trip`
+* `list_trips` (compact shared trip discovery without heavy blobs)
 * `save_item`
 * `get_items`
 * `delete_item`
 
 Backward-compatible stay actions may also be supported during migration.
+
+## Partner Identity System
+
+SaanTayo is tailored for two partners:
+
+```text
+Glen (Canada base)
+Anne (Philippines base)
+```
+
+The application uses a lightweight, client-side identity key:
+
+```text
+localStorage: saantayo_partner_identity_v1 ("Glen" | "Anne")
+```
+
+New saved items (accommodations, dining spots, activities, transit) record the active partner identity in the `SavedBy` column on Google Sheets.
+
+The Shortlist drawer includes a display-only partner filter (`All | Glen | Anne`).
 
 ## Google Sheets
 
@@ -142,31 +162,30 @@ Status
 DetailsJSON
 ```
 
-### Current Item Types
+### Supported Item Types
 
 ```text
 stay
 food
 transport
-```
-
-The schema is designed to support additional types later, including:
-
-```text
 activity
 flight
 note
 ```
 
-## Saved Item Synchronization
+## Saved Item & Trip Synchronization
 
 The normal online flow is:
 
 ```text
+Open Shared Trips modal
+→ call list_trips
+→ render remote shared trip workspaces (including orphan saved-item trips)
+
 Open shared trip
 → identify TripID
-→ fetch trip from Google Sheets
-→ fetch Saved Items
+→ fetch trip from Google Sheets (get_trip)
+→ fetch Saved Items (get_items)
 → replace in-memory saved state
 → update localStorage cache
 → render UI
@@ -176,14 +195,20 @@ After a Saved Item mutation:
 
 ```text
 Save or delete item
-→ write to Google Sheets
+→ write to Google Sheets (with active Partner identity)
 → receive/fetch authoritative Saved Items
 → replace local state
 → update localStorage
 → render
 ```
 
-This prevents localStorage from becoming the accidental source of truth.
+### Auto-Refresh & Background Polling
+
+To ensure Glen and Anne see each other's updates seamlessly:
+* `window.focus` and `document.visibilitychange` trigger debounced auto-sync.
+* Opening the Shortlist or Shared Trips modal refreshes remote state.
+* A background polling loop (every 50 seconds when visible/online) keeps active workspaces fresh.
+* Request guards prevent duplicate or overlapping network requests.
 
 ## Deployment
 
@@ -205,25 +230,14 @@ Google Apps Script
 Google Sheets
 ```
 
-## Current Production Baseline
+## Production Baseline
 
-Universal Saved Items + Google Sheets authoritative synchronization V1 supports:
-
-* Saved accommodations
-* Saved food spots
-* Saved transportation options
-* Cross-browser Saved Item hydration
-* Shared TripID synchronization
-* Remote delete reconciliation
-* Offline cache fallback
-
-Production verification baseline:
+Shared Trip Workspace V1 + Universal Saved Items baseline:
 
 ```text
 Build: PASS
 Static checks: PASS
-Automated tests: 78/78 PASS
+Automated tests: 90/90 PASS
 Clean-browser remote hydration: PASS
+Partner identity & cross-device attribution: PASS
 ```
-
-Last verified: August 31, 2026.

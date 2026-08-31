@@ -33,6 +33,9 @@ import {
   buildActivitySearchLink,
   stripActivitiesBlock,
   parseActivities,
+  PARTNERS,
+  PARTNER_STORAGE_KEY,
+  normalizePartnerIdentity,
 } from "../shared/travel.js";
 import {
   readTrips,
@@ -43,6 +46,11 @@ import {
   expireHistory,
   exportEligible,
   importTripsData,
+  getPartnerIdentity,
+  setPartnerIdentity,
+  readSharedTripsCache,
+  writeSharedTripsCache,
+  SHARED_TRIPS_CACHE_KEY,
 } from "../src/storage.js";
 import { normalizeInteraction } from "../server/gemini.js";
 import {
@@ -857,4 +865,90 @@ test("canonicalizeSavedItem correctly parses activity items with all metadata fi
   assert.equal(item.details.duration, "Half Day");
   assert.equal(item.details.bestFor, "Swimmers and families");
   assert.equal(item.details.bookingTip, "Life vests mandatory in the lake.");
+});
+
+test("normalizePartnerIdentity validates Glen and Anne and defaults to Glen", () => {
+  assert.equal(normalizePartnerIdentity("Glen"), "Glen");
+  assert.equal(normalizePartnerIdentity("glen"), "Glen");
+  assert.equal(normalizePartnerIdentity("Anne"), "Anne");
+  assert.equal(normalizePartnerIdentity("anne"), "Anne");
+  assert.equal(normalizePartnerIdentity("Unknown"), "Glen");
+  assert.equal(normalizePartnerIdentity(null), "Glen");
+  assert.equal(normalizePartnerIdentity("", "Anne"), "Anne");
+});
+
+test("getPartnerIdentity and setPartnerIdentity store and retrieve identity from storage", () => {
+  const mem = memory();
+  assert.equal(getPartnerIdentity(mem), null);
+  setPartnerIdentity(mem, "Anne");
+  assert.equal(getPartnerIdentity(mem), "Anne");
+  assert.equal(mem.getItem(PARTNER_STORAGE_KEY), "Anne");
+  setPartnerIdentity(mem, "Glen");
+  assert.equal(getPartnerIdentity(mem), "Glen");
+});
+
+test("readSharedTripsCache and writeSharedTripsCache handle compact trip descriptors", () => {
+  const mem = memory();
+  assert.equal(readSharedTripsCache(mem), null);
+
+  const mockTrips = [
+    { tripId: "t-1", destination: "Coron", itemCount: 3, hasTripData: true },
+  ];
+  writeSharedTripsCache(mem, mockTrips);
+  assert.deepEqual(readSharedTripsCache(mem), mockTrips);
+  assert.equal(mem.getItem(SHARED_TRIPS_CACHE_KEY), JSON.stringify(mockTrips));
+
+  writeSharedTripsCache(mem, []);
+  assert.deepEqual(readSharedTripsCache(mem), []);
+});
+
+test("canonicalizeSavedItem respects fallbackSavedBy when savedBy is absent", () => {
+  const raw = { itemId: "item-1", name: "Sample Cafe", itemType: "food" };
+  const itemGlen = canonicalizeSavedItem(raw, "trip-1", "Glen");
+  assert.equal(itemGlen.savedBy, "Glen");
+
+  const itemAnne = canonicalizeSavedItem(raw, "trip-1", "Anne");
+  assert.equal(itemAnne.savedBy, "Anne");
+
+  const rawExplicit = {
+    itemId: "item-2",
+    name: "Beach Resort",
+    itemType: "stay",
+    savedBy: "Anne",
+  };
+  const itemExplicit = canonicalizeSavedItem(rawExplicit, "trip-1", "Glen");
+  assert.equal(itemExplicit.savedBy, "Anne");
+});
+
+test("cross-device Glen and Anne saves normalize into a combined list with distinct attribution", () => {
+  const glenSave = canonicalizeSavedItem(
+    { name: "Shangri-La Mactan", price: "₱12,000", itemType: "stay" },
+    "cebu-2026",
+    "Glen",
+  );
+  const anneSave = canonicalizeSavedItem(
+    { name: "Lantaw Floating Restaurant", price: "₱600", itemType: "food" },
+    "cebu-2026",
+    "Anne",
+  );
+
+  const combined = normalizeSavedItems([glenSave, anneSave], "cebu-2026");
+  assert.equal(combined.length, 2);
+  assert.equal(combined[0].savedBy, "Glen");
+  assert.equal(combined[1].savedBy, "Anne");
+});
+
+test("mixed items separation — savedItems retains all types while stays retains only stay", () => {
+  const mixed = [
+    { itemId: "s1", itemType: "stay", name: "Hotel", savedBy: "Glen" },
+    { itemId: "f1", itemType: "food", name: "Cafe", savedBy: "Anne" },
+    { itemId: "a1", itemType: "activity", name: "Tour", savedBy: "Glen" },
+    { itemId: "t1", itemType: "transport", name: "Bus", savedBy: "Anne" },
+  ];
+  const normalized = normalizeSavedItems(mixed, "trip-1", "Glen");
+  assert.equal(normalized.length, 4);
+  const staysOnly = normalized.filter((item) => item.itemType === "stay");
+  assert.equal(staysOnly.length, 1);
+  assert.equal(staysOnly[0].itemType, "stay");
+  assert.equal(staysOnly[0].name, "Hotel");
 });
