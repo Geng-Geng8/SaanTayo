@@ -1,16 +1,17 @@
 export const STORE_KEY = "saantayo_trips_v2",
   LEGACY_KEY = "saantayo_saved_trips",
-  PARTNER_STORAGE_KEY = "saantayo_partner_identity_v1";
+  PARTNER_STORAGE_KEY = "saantayo_partner_identity_v1",
+  SHARED_TRIPS_CACHE_KEY = "saantayo_shared_trips_v1";
 
 export function getPartnerIdentity(
   storage = typeof localStorage !== "undefined" ? localStorage : null,
 ) {
-  if (!storage) return "Glen";
+  if (!storage) return null;
   try {
     const val = storage.getItem(PARTNER_STORAGE_KEY);
     if (val === "Glen" || val === "Anne") return val;
   } catch {}
-  return "Glen";
+  return null;
 }
 
 export function setPartnerIdentity(
@@ -24,6 +25,30 @@ export function setPartnerIdentity(
     } catch {}
   }
   return norm;
+}
+
+export function readSharedTripsCache(
+  storage = typeof localStorage !== "undefined" ? localStorage : null,
+) {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(SHARED_TRIPS_CACHE_KEY);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return null;
+}
+
+export function writeSharedTripsCache(
+  storage = typeof localStorage !== "undefined" ? localStorage : null,
+  trips = [],
+) {
+  if (!storage || !Array.isArray(trips)) return;
+  try {
+    storage.setItem(SHARED_TRIPS_CACHE_KEY, JSON.stringify(trips));
+  } catch {}
 }
 export function legacyTrip(value, index = 0) {
   if (

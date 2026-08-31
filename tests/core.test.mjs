@@ -48,6 +48,9 @@ import {
   importTripsData,
   getPartnerIdentity,
   setPartnerIdentity,
+  readSharedTripsCache,
+  writeSharedTripsCache,
+  SHARED_TRIPS_CACHE_KEY,
 } from "../src/storage.js";
 import { normalizeInteraction } from "../server/gemini.js";
 import {
@@ -876,12 +879,27 @@ test("normalizePartnerIdentity validates Glen and Anne and defaults to Glen", ()
 
 test("getPartnerIdentity and setPartnerIdentity store and retrieve identity from storage", () => {
   const mem = memory();
-  assert.equal(getPartnerIdentity(mem), "Glen");
+  assert.equal(getPartnerIdentity(mem), null);
   setPartnerIdentity(mem, "Anne");
   assert.equal(getPartnerIdentity(mem), "Anne");
   assert.equal(mem.getItem(PARTNER_STORAGE_KEY), "Anne");
   setPartnerIdentity(mem, "Glen");
   assert.equal(getPartnerIdentity(mem), "Glen");
+});
+
+test("readSharedTripsCache and writeSharedTripsCache handle compact trip descriptors", () => {
+  const mem = memory();
+  assert.equal(readSharedTripsCache(mem), null);
+
+  const mockTrips = [
+    { tripId: "t-1", destination: "Coron", itemCount: 3, hasTripData: true },
+  ];
+  writeSharedTripsCache(mem, mockTrips);
+  assert.deepEqual(readSharedTripsCache(mem), mockTrips);
+  assert.equal(mem.getItem(SHARED_TRIPS_CACHE_KEY), JSON.stringify(mockTrips));
+
+  writeSharedTripsCache(mem, []);
+  assert.deepEqual(readSharedTripsCache(mem), []);
 });
 
 test("canonicalizeSavedItem respects fallbackSavedBy when savedBy is absent", () => {

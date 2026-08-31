@@ -12,6 +12,7 @@ async function setup({
   post,
   sheetsHandler,
   url = "https://app.example/",
+  fresh = false,
 } = {}) {
   const dom = new JSDOM(html, {
     url,
@@ -27,7 +28,12 @@ async function setup({
     this.open = false;
   };
   w.confirm = () => true;
-  for (const [k, v] of Object.entries(initial)) w.localStorage.setItem(k, v);
+  const init = fresh
+    ? initial
+    : { saantayo_partner_identity_v1: "Glen", ...initial };
+  for (const [k, v] of Object.entries(init)) {
+    if (v !== null && v !== undefined) w.localStorage.setItem(k, v);
+  }
   const requests = [];
   const sheetsRequests = [];
   w.fetch = async (reqUrl, options = {}) => {
@@ -852,155 +858,408 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
   app.dom.window.close();
 });
 
-test("Partner Identity switching and saves attribution to Glen vs Anne", async () => {
-  let savedServerItems = [];
-  const app = await setup({
-    sheetsHandler: (reqUrl, options, { action, bodyObj }) => {
-      if (action === "save_item") {
-        savedServerItems.push(bodyObj);
-        return Response.json({
-          status: "success",
-          items: savedServerItems,
-        });
-      }
-      if (action === "get_items") {
-        return Response.json({
-          status: "success",
-          items: savedServerItems,
-        });
-      }
-      return Response.json({ status: "success" });
-    },
+test("First-use partner identity chooser and explicit selection without accidental toggle", async () => {
+  const app = await setup({ fresh: true });
+
+  // Fresh storage: identity is not silently Glen
+  assert.equal(
+    app.dom.window.localStorage.getItem("saantayo_partner_identity_v1"),
+    null,
+  );
+  assert.equal(app.$("currentPartnerLabel").textContent, "Select");
+  // Chooser opened automatically
+  assert.equal(app.$("partnerModal").open, true);
+
+  // Clicking partner toggle button does NOT change identity
+  app.$("partnerToggleBtn").click();
+  await tick();
+  assert.equal(
+    app.dom.window.localStorage.getItem("saantayo_partner_identity_v1"),
+    null,
+  );
+
+  // Trying to save without selecting partner blocks save and ensures modal is open
+  await app.generate();
+  const stayPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".pin-btn");
+  stayPinBtns[0].click();
+  await tick();
+  assert.equal(app.$("shortlistBadge").textContent, "0");
+  assert.equal(app.$("partnerModal").open, true);
+
+  // Select Anne
+  app.$("selectAnneBtn").click();
+  await tick();
+  assert.equal(
+    app.dom.window.localStorage.getItem("saantayo_partner_identity_v1"),
+    "Anne",
+  );
+  assert.equal(app.$("currentPartnerLabel").textContent, "Anne");
+  assert.equal(app.$("partnerModal").open, false);
+
+  app.dom.window.close();
+
+  // Reload: Anne is restored and chooser does not auto-open
+  const appReload = await setup({
+    initial: { saantayo_partner_identity_v1: "Anne" },
+  });
+  assert.equal(appReload.$("currentPartnerLabel").textContent, "Anne");
+  assert.equal(appReload.$("partnerModal").open, false);
+  appReload.dom.window.close();
+});
+
+test("Test A — Glen → clean Anne device cross-device synchronization", async () => {
+  let backendTrips = [];
+  let backendItems = [];
+
+  const sheetsBackendHandler = (reqUrl, options, { action, bodyObj }) => {
+    if (action === "save_trip") {
+      backendTrips.push(bodyObj);
+      return Response.json({ status: "success", type: "trip_saved" });
+    }
+    if (action === "save_item") {
+      backendItems.push(bodyObj);
+      return Response.json({ status: "success", type: "item_saved", items: backendItems });
+    }
+    if (action === "list_trips") {
+      return Response.json({
+        status: "success",
+        trips: [
+          {
+            tripId: "shared-cebu-1",
+            destination: "Cebu City",
+            startDate: "2026-10-01",
+            endDate: "2026-10-05",
+            createdAt: "2026-08-31T10:00:00Z",
+            itemCount: backendItems.length,
+            hasTripData: true,
+          },
+        ],
+      });
+    }
+    if (action === "get_trip") {
+      return Response.json({
+        status: "success",
+        tripId: "shared-cebu-1",
+        tripDataJSON: JSON.stringify({
+          id: "shared-cebu-1",
+          destination: "Cebu City",
+          trip: { destination: "Cebu City", mode: "itinerary", days: 4, people: 2 },
+          result: { parts: [{ text: "Cebu City itinerary plan" }], createdAt: "2026-08-31" },
+        }),
+        items: backendItems,
+      });
+    }
+    if (action === "get_items") {
+      return Response.json({
+        status: "success",
+        tripId: "shared-cebu-1",
+        items: backendItems,
+      });
+    }
+    return Response.json({ status: "success" });
+  };
+
+  // Device A (Glen)
+  const deviceA = await setup({
+    initial: { saantayo_partner_identity_v1: "Glen" },
+    sheetsHandler: sheetsBackendHandler,
   });
 
-  await app.generate();
-
-  // 1. Initial partner is Glen
-  assert.equal(app.$("currentPartnerLabel").textContent, "Glen");
-
-  // 2. Save an item as Glen
-  const stayPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".pin-btn");
+  await deviceA.generate();
+  // Pin stay as Glen
+  const stayPinBtns = (deviceA.$("aiStaysGrid") || deviceA.$("providerLinksGrid")).querySelectorAll(".pin-btn");
   stayPinBtns[0].click();
   await tick();
   await tick();
 
-  assert.equal(savedServerItems.length, 1);
-  assert.equal(savedServerItems[0].savedBy, "Glen");
+  assert.equal(backendItems.length, 1);
+  assert.equal(backendItems[0].savedBy, "Glen");
+  deviceA.dom.window.close();
 
-  // 3. Switch partner to Anne
-  app.$("selectAnneBtn").click();
+  // Device B (Anne) - completely fresh localStorage
+  const deviceB = await setup({
+    initial: { saantayo_partner_identity_v1: "Anne" },
+    sheetsHandler: sheetsBackendHandler,
+  });
+
+  // Device B automatically runs list_trips at startup
   await tick();
-  assert.equal(app.$("currentPartnerLabel").textContent, "Anne");
+  await tick();
 
-  // 4. Save a dining item as Anne
-  const foodPinBtns = app.$("diningCardsGrid").querySelectorAll(".pin-btn");
-  foodPinBtns[0].click();
+  // Open Shared Trips modal
+  deviceB.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
   await tick();
 
-  assert.equal(savedServerItems.length, 2);
-  assert.equal(savedServerItems[1].savedBy, "Anne");
+  const rows = deviceB.$("savedTripsList").querySelectorAll(".shared-trip-row");
+  assert.equal(rows.length, 1);
+  assert.ok(rows[0].textContent.includes("Cebu City"));
 
-  // 5. Open shortlist and verify partner filter
-  app.$("openShortlistBtn").click();
+  // Open the trip
+  const openBtn = rows[0].querySelector('[data-load]');
+  openBtn.click();
   await tick();
-  assert.equal(app.$("shortlistBadge").textContent, "2");
-
-  // Click Anne filter
-  const filterAnneBtn = app.dom.window.document.querySelector('[data-partner-filter="Anne"]');
-  filterAnneBtn.click();
   await tick();
-  let visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
-  assert.equal(visible.length, 1);
-  assert.ok(visible[0].textContent.includes("Saved by Anne"));
 
-  // Click Glen filter
-  const filterGlenBtn = app.dom.window.document.querySelector('[data-partner-filter="Glen"]');
-  filterGlenBtn.click();
+  assert.equal(deviceB.$("shortlistBadge").textContent, "1");
+  deviceB.$("openShortlistBtn").click();
   await tick();
-  visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
-  assert.equal(visible.length, 1);
-  assert.ok(visible[0].textContent.includes("Saved by Glen"));
+  const visibleItems = deviceB.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(visibleItems.length, 1);
+  assert.ok(visibleItems[0].textContent.includes("Saved by Glen"));
 
-  // Click All filter
-  const filterAllBtn = app.dom.window.document.querySelector('[data-partner-filter="all"]');
-  filterAllBtn.click();
-  await tick();
-  visible = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
-  assert.equal(visible.length, 2);
-
-  app.dom.window.close();
+  deviceB.dom.window.close();
 });
 
-test("Shared Trips discovery via list_trips action and opening orphan workspace", async () => {
-  const mockSharedTrips = [
-    {
-      tripId: "palawan-2026",
-      destination: "El Nido, Palawan",
-      startDate: "2026-09-10",
-      endDate: "2026-09-15",
-      createdAt: "2026-08-20T10:00:00Z",
-      itemCount: 5,
-      hasTripData: true,
-    },
-    {
-      tripId: "siargao-orphan",
-      destination: "Siargao Island",
-      startDate: "",
-      endDate: "",
-      createdAt: "2026-08-22T12:00:00Z",
-      itemCount: 2,
-      hasTripData: false,
-    },
+test("Test B — Anne → Glen live refresh", async () => {
+  let backendItems = [
+    { itemId: "glen-1", tripId: "shared-trip-1", itemType: "stay", name: "Radisson Blu Cebu", price: "₱6,000", savedBy: "Glen" },
   ];
 
-  let listTripsCalled = false;
-  const app = await setup({
+  const appGlen = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_trips_v2: JSON.stringify({
+        version: 2,
+        trips: [
+          {
+            id: "shared-trip-1",
+            destination: "Cebu City",
+            trip: { destination: "Cebu City", mode: "itinerary", days: 3, people: 2 },
+            result: { parts: [{ text: "Cebu Itinerary" }], createdAt: "2026-08-31" },
+            savedItems: backendItems,
+          },
+        ],
+      }),
+    },
+    url: "https://app.example/?trip=shared-trip-1",
     sheetsHandler: (reqUrl, options, { action }) => {
-      if (action === "list_trips") {
-        listTripsCalled = true;
-        return Response.json({
-          status: "success",
-          trips: mockSharedTrips,
-        });
-      }
       if (action === "get_items") {
+        return Response.json({ status: "success", tripId: "shared-trip-1", items: backendItems });
+      }
+      if (action === "get_trip") {
         return Response.json({
           status: "success",
-          items: [
-            { itemId: "stay-1", name: "Kermit Surf Resort", itemType: "stay", savedBy: "Anne", price: "₱3,500" },
-            { itemId: "food-1", name: "Shaka Bowls", itemType: "food", savedBy: "Glen", price: "₱350" },
-          ],
+          tripId: "shared-trip-1",
+          tripDataJSON: JSON.stringify({
+            id: "shared-trip-1",
+            destination: "Cebu City",
+            trip: { destination: "Cebu City", mode: "itinerary", days: 3, people: 2 },
+            result: { parts: [{ text: "Cebu Itinerary" }], createdAt: "2026-08-31" },
+          }),
+          items: backendItems,
         });
       }
       return Response.json({ status: "success" });
     },
   });
 
-  // Open Shared Trips modal
-  const openSavedTripsBtn = app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]');
-  openSavedTripsBtn.click();
+  await tick();
+  await tick();
+  assert.equal(appGlen.$("shortlistBadge").textContent, "1");
+
+  // Anne adds an item on backend
+  backendItems.push({
+    itemId: "anne-1",
+    tripId: "shared-trip-1",
+    itemType: "food",
+    name: "Lantaw Floating Restaurant",
+    price: "₱600",
+    savedBy: "Anne",
+  });
+
+  // Trigger focus event on Glen's browser window
+  appGlen.dom.window.dispatchEvent(new appGlen.dom.window.Event("focus"));
   await tick();
   await tick();
 
-  assert.ok(listTripsCalled);
-  assert.equal(app.$("savedCountBadge").textContent, "2");
+  assert.equal(appGlen.$("shortlistBadge").textContent, "2");
+  appGlen.$("openShortlistBtn").click();
+  await tick();
+  const visible = appGlen.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(visible.length, 2);
+  assert.ok(visible[1].textContent.includes("Saved by Anne"));
+
+  appGlen.dom.window.close();
+});
+
+test("Cross-trip stale response protection", async () => {
+  let tripAItemsResolver;
+  const tripAPromise = new Promise((resolve) => {
+    tripAItemsResolver = resolve;
+  });
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_trips_v2: JSON.stringify({
+        version: 2,
+        trips: [
+          {
+            id: "trip-A",
+            destination: "Manila",
+            trip: { destination: "Manila", mode: "itinerary", days: 2, people: 2 },
+            result: { parts: [{ text: "Manila Itinerary" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+            savedItems: [],
+          },
+          {
+            id: "trip-B",
+            destination: "Baguio",
+            trip: { destination: "Baguio", mode: "itinerary", days: 2, people: 2 },
+            result: { parts: [{ text: "Baguio Itinerary" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+            savedItems: [],
+          },
+        ],
+      }),
+    },
+    url: "https://app.example/?trip=trip-A",
+    sheetsHandler: async (reqUrl, options, { action, bodyObj }) => {
+      const parsed = new URL(reqUrl);
+      const tripId = parsed.searchParams.get("tripId");
+      if (action === "get_items" && tripId === "trip-A") {
+        await tripAPromise;
+        return Response.json({
+          status: "success",
+          tripId: "trip-A",
+          items: [{ itemId: "item-a", name: "Manila Hotel", itemType: "stay", savedBy: "Glen" }],
+        });
+      }
+      if (action === "get_items" && tripId === "trip-B") {
+        return Response.json({
+          status: "success",
+          tripId: "trip-B",
+          items: [{ itemId: "item-b", name: "The Manor Baguio", itemType: "stay", savedBy: "Anne" }],
+        });
+      }
+      if (action === "get_trip" && tripId === "trip-B") {
+        return Response.json({
+          status: "success",
+          tripId: "trip-B",
+          tripDataJSON: JSON.stringify({
+            id: "trip-B",
+            destination: "Baguio",
+            trip: { destination: "Baguio", mode: "itinerary", days: 2, people: 2 },
+            result: { parts: [{ text: "Baguio Itinerary" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+          }),
+          items: [{ itemId: "item-b", name: "The Manor Baguio", itemType: "stay", savedBy: "Anne" }],
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  await tick();
+  // While trip-A get_items is in flight, user opens trip-B via Shared Trips modal
+  app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
+  await tick();
+  const openTripBBtn = app.$("savedTripsList").querySelectorAll('[data-load]')[1];
+  openTripBBtn.click();
+  await tick();
+  await tick();
+
+  // Active trip is now Baguio (trip-B)
+  assert.equal(app.$("resultMetaBadge").textContent, "Baguio");
+
+  // Now resolve the delayed trip-A get_items response
+  tripAItemsResolver();
+  await tick();
+  await tick();
+
+  // Active shortlist must NOT contain Manila Hotel
+  assert.equal(app.$("shortlistBadge").textContent, "1");
+  app.$("openShortlistBtn").click();
+  await tick();
+  const items = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(items.length, 1);
+  assert.ok(items[0].textContent.includes("The Manor Baguio"));
+  assert.ok(!items[0].textContent.includes("Manila Hotel"));
+
+  app.dom.window.close();
+});
+
+test("Authoritative empty state reconciliation clears stale local cache", async () => {
+  const staleItems = [
+    { itemId: "stale-1", tripId: "trip-authoritative", name: "Old Pinned Hotel", itemType: "stay", savedBy: "Glen" },
+  ];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_trips_v2: JSON.stringify({
+        version: 2,
+        trips: [
+          {
+            id: "trip-authoritative",
+            destination: "Davao",
+            trip: { destination: "Davao", mode: "itinerary", days: 2, people: 2 },
+            result: { parts: [{ text: "Davao Itinerary" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+            savedItems: staleItems,
+          },
+        ],
+      }),
+    },
+    url: "https://app.example/?trip=trip-authoritative",
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "get_items") {
+        return Response.json({
+          status: "success",
+          tripId: "trip-authoritative",
+          items: [],
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  await tick();
+  await tick();
+
+  assert.equal(app.$("shortlistBadge").textContent, "0");
+  app.$("openShortlistBtn").click();
+  await tick();
+  assert.equal(app.$("shortlistItemsList").querySelectorAll(".shortlist-item").length, 0);
+
+  // Local storage for that trip is also emptied
+  const localTripsData = JSON.parse(app.dom.window.localStorage.getItem("saantayo_trips_v2"));
+  assert.deepEqual(localTripsData.trips[0].savedItems, []);
+
+  app.dom.window.close();
+});
+
+test("Offline shared-trip cache persists descriptors across restarts", async () => {
+  const cachedDescriptors = [
+    {
+      tripId: "offline-trip-1",
+      destination: "Batanes",
+      startDate: "2026-11-01",
+      endDate: "2026-11-05",
+      createdAt: "2026-08-31T10:00:00Z",
+      itemCount: 3,
+      hasTripData: true,
+    },
+  ];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Anne",
+      saantayo_shared_trips_v1: JSON.stringify(cachedDescriptors),
+    },
+    sheetsHandler: () => {
+      throw new Error("Network offline / 500");
+    },
+  });
+
+  await tick();
+  await tick();
+
+  // Open Shared Trips modal while offline
+  app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
+  await tick();
 
   const rows = app.$("savedTripsList").querySelectorAll(".shared-trip-row");
-  assert.equal(rows.length, 2);
-  assert.ok(rows[0].textContent.includes("El Nido, Palawan"));
-  assert.ok(rows[0].textContent.includes("5 items"));
-  assert.ok(rows[1].textContent.includes("Siargao Island"));
-  assert.ok(rows[1].textContent.includes("Saved Items"));
-
-  // Click Open on the orphan trip (Siargao)
-  const openBtns = app.$("savedTripsList").querySelectorAll('[data-load]');
-  openBtns[1].click();
-  await tick();
-  await tick();
-
-  assert.match(app.$("renderedMarkdown").textContent, /Siargao Island/);
-  assert.equal(app.$("shortlistBadge").textContent, "2");
+  assert.equal(rows.length, 1);
+  assert.ok(rows[0].textContent.includes("Batanes"));
+  assert.ok(rows[0].textContent.includes("3 items"));
 
   app.dom.window.close();
 });

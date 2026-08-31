@@ -32,6 +32,8 @@ import {
   importTripsData,
   getPartnerIdentity,
   setPartnerIdentity,
+  readSharedTripsCache,
+  writeSharedTripsCache,
 } from "./storage.js";
 import {
   el,
@@ -56,7 +58,7 @@ let mode = "itinerary",
   activePartnerFilter = "all",
   sharedTrips = [],
   isLoadingSharedTrips = false,
-  isRefreshingItems = false,
+  inFlightRefreshes = new Set(),
   lastAutoRefresh = 0,
   current = null,
   savedItems = [],
@@ -660,10 +662,18 @@ async function saveCurrentToSheets() {
 }
 
 async function saveItem(rawItem) {
+  const partner = getPartnerIdentity(localStorage);
+  if (!partner) {
+    const modal = $("partnerModal");
+    if (modal && typeof modal.showModal === "function") {
+      modal.showModal();
+    }
+    toast("Please select who's using this device first.");
+    return;
+  }
   if (!current) current = {};
   if (!current.id) current.id = crypto.randomUUID();
   const tripId = current.id;
-  const partner = getPartnerIdentity(localStorage) || "Glen";
   const canonical = canonicalizeSavedItem(
     {
       ...rawItem,
@@ -880,6 +890,18 @@ async function pinTransit(leg) {
 
 const unpinStay = deleteItem;
 
+function syncSavedItemsState(items = []) {
+  const tripId = current?.id;
+  const partner = getPartnerIdentity(localStorage) || "Glen";
+  savedItems = normalizeSavedItems(items || [], tripId, partner);
+  pinnedStays = savedItems;
+  if (current) {
+    current.savedItems = savedItems;
+    current.stays = savedItems;
+  }
+  badge();
+}
+
 function renderShortlist({ isLoading = false } = {}) {
   const badge = $("shortlistBadge");
   if (badge) {
@@ -940,11 +962,13 @@ function renderShortlist({ isLoading = false } = {}) {
 
 async function loadSavedItemsFromSheets(tripId) {
   if (!tripId) return null;
-  if (isRefreshingItems) return savedItems;
-  isRefreshingItems = true;
+  if (inFlightRefreshes.has(tripId)) return savedItems;
+  inFlightRefreshes.add(tripId);
   try {
     const statusEl = $("shortlistSyncStatus");
-    if (statusEl) statusEl.textContent = "Refreshing shared items…";
+    if (statusEl && current?.id === tripId) {
+      statusEl.textContent = "Refreshing shared items…";
+    }
 
     let res = null;
     try {
@@ -978,26 +1002,42 @@ async function loadSavedItemsFromSheets(tripId) {
             : null;
 
     if (rawList !== null) {
-      syncSavedItemsState(rawList);
-      if (current && (!current.id || current.id === tripId)) {
+      // Race protection: only update in-memory state & UI if current trip matches (or unset)
+      if (!current || current.id === tripId) {
+        syncSavedItemsState(rawList);
+        if (current) {
+          try {
+            saveTrip(localStorage, current);
+          } catch {}
+        }
+        renderShortlist();
+        renderAccommodations();
+        renderDining();
+        renderActivities();
+        renderTransit();
+        if (statusEl) statusEl.textContent = "Synced just now";
+        return savedItems;
+      } else {
+        // User switched trips: persist background response to local storage cache for tripId without polluting active UI
         try {
-          saveTrip(localStorage, current);
+          const allLocal = readTrips(localStorage);
+          const targetTrip = allLocal.find((t) => t.id === tripId);
+          if (targetTrip) {
+            targetTrip.savedItems = rawList;
+            saveTrip(localStorage, targetTrip);
+          }
         } catch {}
+        return rawList;
       }
-      renderShortlist();
-      renderAccommodations();
-      renderDining();
-      renderActivities();
-      renderTransit();
-      if (statusEl) statusEl.textContent = "Synced just now";
-      return savedItems;
     }
   } catch (err) {
     console.warn("Could not load saved items from Sheets:", err);
     const statusEl = $("shortlistSyncStatus");
-    if (statusEl) statusEl.textContent = "Offline · showing cached items";
+    if (statusEl && current?.id === tripId) {
+      statusEl.textContent = "Offline · showing cached items";
+    }
   } finally {
-    isRefreshingItems = false;
+    inFlightRefreshes.delete(tripId);
   }
   return null;
 }
@@ -1022,32 +1062,35 @@ async function loadTripFromSheets(tripId) {
       const parsed =
         typeof rawData === "string" ? JSON.parse(rawData) : rawData;
       if (parsed && (parsed.result || parsed.trip)) {
-        current = parsed;
-        if (!current.id) current.id = tripId;
+        // Race check: only apply if this tripId is still active (or current not yet initialized)
+        if (!current || !current.id || current.id === tripId) {
+          current = parsed;
+          current.id = tripId;
 
-        const directItems = Array.isArray(res?.items)
-          ? res.items
-          : Array.isArray(res?.stays)
-            ? res.stays
-            : Array.isArray(parsed?.savedItems)
-              ? parsed.savedItems
-              : Array.isArray(parsed?.stays)
-                ? parsed.stays
-                : null;
+          const directItems = Array.isArray(res?.items)
+            ? res.items
+            : Array.isArray(res?.stays)
+              ? res.stays
+              : Array.isArray(parsed?.savedItems)
+                ? parsed.savedItems
+                : Array.isArray(parsed?.stays)
+                  ? parsed.stays
+                  : null;
 
-        if (directItems !== null) {
-          syncSavedItemsState(directItems);
+          if (directItems !== null) {
+            syncSavedItemsState(directItems);
+          }
+
+          try {
+            saveTrip(localStorage, current);
+          } catch {}
+
+          showCurrent();
+          renderShortlist();
+          toast("Trip itinerary hydrated from Google Sheets.");
+          $("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
+          remoteLoaded = true;
         }
-
-        try {
-          saveTrip(localStorage, current);
-        } catch {}
-
-        showCurrent();
-        renderShortlist();
-        toast("Trip itinerary hydrated from Google Sheets.");
-        $("resultsContainer")?.scrollIntoView({ behavior: "smooth" });
-        remoteLoaded = true;
       }
     }
   } catch (err) {
@@ -1055,7 +1098,7 @@ async function loadTripFromSheets(tripId) {
   }
 
   const remoteItems = await loadSavedItemsFromSheets(tripId);
-  if (remoteItems === null && !remoteLoaded) {
+  if (remoteItems === null && !remoteLoaded && current?.id === tripId) {
     $("connectionStatus").textContent =
       "Offline · showing cached trip and saved items.";
   }
@@ -1097,6 +1140,7 @@ async function loadSharedTripsFromSheets({ showToast = false } = {}) {
     );
     if (res?.status === "success" && Array.isArray(res?.trips)) {
       sharedTrips = res.trips;
+      writeSharedTripsCache(localStorage, sharedTrips);
       badge();
       renderSaved();
       if (showToast) toast("Shared trips refreshed from Google Sheets.");
@@ -1104,7 +1148,13 @@ async function loadSharedTripsFromSheets({ showToast = false } = {}) {
     }
   } catch (err) {
     console.warn("Could not load shared trips from Sheets:", err);
-    renderSaved();
+    // Remote failure: retain cache
+    const cached = readSharedTripsCache(localStorage);
+    if (cached !== null) {
+      sharedTrips = cached;
+      badge();
+      renderSaved();
+    }
   } finally {
     isLoadingSharedTrips = false;
   }
@@ -1128,7 +1178,23 @@ function renderSaved() {
     return;
   }
 
-  const trips = readAll();
+  const cached = readSharedTripsCache(localStorage);
+  if (cached && cached.length) {
+    for (const trip of cached) {
+      box.append(
+        renderSharedTripRow(trip, {
+          onLoad: (t) => openSharedTrip(t),
+          onDelete: (t) => deleteSharedTrip(t),
+        }),
+      );
+    }
+    return;
+  }
+
+  let trips = [];
+  try {
+    trips = readTrips(localStorage);
+  } catch {}
   if (!trips.length) {
     box.append(
       el(
@@ -1225,6 +1291,7 @@ function deleteSharedTrip(trip) {
       readTrips(localStorage).filter((t) => t.id !== tripId),
     );
     sharedTrips = sharedTrips.filter((t) => (t.tripId || t.id) !== tripId);
+    writeSharedTripsCache(localStorage, sharedTrips);
     badge();
     renderSaved();
     toast("Trip removed from this device. Existing backups are unchanged.");
@@ -1576,9 +1643,9 @@ async function connection() {
   setBusy(!!controller);
 }
 function updatePartnerIdentityUI() {
-  const partner = getPartnerIdentity(localStorage) || "Glen";
+  const partner = getPartnerIdentity(localStorage);
   const label = $("currentPartnerLabel");
-  if (label) label.textContent = partner;
+  if (label) label.textContent = partner || "Select";
 
   const glenBtn = $("selectGlenBtn");
   const anneBtn = $("selectAnneBtn");
@@ -1593,13 +1660,14 @@ function updatePartnerIdentityUI() {
 function switchPartner(identity) {
   const norm = setPartnerIdentity(localStorage, identity);
   updatePartnerIdentityUI();
-  toast(`Active partner set to ${norm}.`);
+  $("partnerModal")?.close();
+  toast(`Using SaanTayo as ${norm}`);
 }
 
 function triggerAutoRefresh(reason = "auto") {
-  if (!current?.id || isRefreshingItems) return;
+  if (!current?.id || inFlightRefreshes.has(current.id)) return;
   const now = Date.now();
-  if (reason !== "manual" && now - lastAutoRefresh < 8000) return;
+  if (reason !== "manual" && now - lastAutoRefresh < 1000) return;
   lastAutoRefresh = now;
   loadSavedItemsFromSheets(current.id);
 }
@@ -1618,19 +1686,31 @@ try {
 }
 setMode("itinerary");
 syncVibes();
+const cachedShared = readSharedTripsCache(localStorage);
+if (cachedShared !== null) {
+  sharedTrips = cachedShared;
+}
 updatePartnerIdentityUI();
 badge();
 renderShortlist();
+renderSaved();
 loadTripFromUrl();
 connection();
 
+// First-use chooser: if no partner identity has been set, open chooser modal automatically
+const initialPartner = getPartnerIdentity(localStorage);
+if (!initialPartner) {
+  const modal = $("partnerModal");
+  if (modal && typeof modal.showModal === "function") {
+    modal.showModal();
+  }
+}
+
+// Auto-discover shared trips at startup
+loadSharedTripsFromSheets();
+
 $("selectGlenBtn")?.addEventListener("click", () => switchPartner("Glen"));
 $("selectAnneBtn")?.addEventListener("click", () => switchPartner("Anne"));
-$("partnerToggleBtn")?.addEventListener("click", () => {
-  const currentPartner = getPartnerIdentity(localStorage) || "Glen";
-  const next = currentPartner === "Glen" ? "Anne" : "Glen";
-  switchPartner(next);
-});
 
 $("refreshSharedTripsBtn")?.addEventListener("click", () => {
   loadSharedTripsFromSheets({ showToast: true });
