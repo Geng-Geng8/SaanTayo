@@ -57,6 +57,7 @@ let mode = "itinerary",
   activeStayFilter = "all",
   activePartnerFilter = "all",
   sharedTrips = [],
+  hasSharedSnapshot = false,
   isLoadingSharedTrips = false,
   inFlightRefreshes = new Set(),
   lastAutoRefresh = 0,
@@ -95,7 +96,12 @@ function readAll() {
   }
 }
 function badge() {
-  const count = sharedTrips.length || readAll().length;
+  let count = 0;
+  if (hasSharedSnapshot) {
+    count = sharedTrips.length;
+  } else {
+    count = readAll().length;
+  }
   const badgeEl = $("savedCountBadge");
   if (badgeEl) badgeEl.textContent = String(count);
 }
@@ -609,13 +615,16 @@ async function refreshFx() {
   } catch {}
   renderBudget();
 }
-function syncSavedItemsState(items) {
-  savedItems = normalizeSavedItems(items, current?.id || "");
+function syncSavedItemsState(items = []) {
+  const tripId = current?.id || "";
+  const partner = getPartnerIdentity(localStorage) || "Glen";
+  savedItems = normalizeSavedItems(items || [], tripId, partner);
   pinnedStays = savedItems;
   if (current) {
     current.savedItems = savedItems;
     current.stays = savedItems.filter((s) => s.itemType === "stay");
   }
+  badge();
 }
 
 function persistCurrent() {
@@ -890,18 +899,6 @@ async function pinTransit(leg) {
 
 const unpinStay = deleteItem;
 
-function syncSavedItemsState(items = []) {
-  const tripId = current?.id;
-  const partner = getPartnerIdentity(localStorage) || "Glen";
-  savedItems = normalizeSavedItems(items || [], tripId, partner);
-  pinnedStays = savedItems;
-  if (current) {
-    current.savedItems = savedItems;
-    current.stays = savedItems;
-  }
-  badge();
-}
-
 function renderShortlist({ isLoading = false } = {}) {
   const badge = $("shortlistBadge");
   if (badge) {
@@ -1140,6 +1137,7 @@ async function loadSharedTripsFromSheets({ showToast = false } = {}) {
     );
     if (res?.status === "success" && Array.isArray(res?.trips)) {
       sharedTrips = res.trips;
+      hasSharedSnapshot = true;
       writeSharedTripsCache(localStorage, sharedTrips);
       badge();
       renderSaved();
@@ -1148,10 +1146,11 @@ async function loadSharedTripsFromSheets({ showToast = false } = {}) {
     }
   } catch (err) {
     console.warn("Could not load shared trips from Sheets:", err);
-    // Remote failure: retain cache
+    // Remote failure: retain cache if it exists (including empty snapshot [])
     const cached = readSharedTripsCache(localStorage);
     if (cached !== null) {
       sharedTrips = cached;
+      hasSharedSnapshot = true;
       badge();
       renderSaved();
     }
@@ -1166,7 +1165,17 @@ function renderSaved() {
   if (!box) return;
   box.replaceChildren();
 
-  if (sharedTrips && sharedTrips.length) {
+  if (hasSharedSnapshot) {
+    if (!sharedTrips.length) {
+      box.append(
+        el(
+          "p",
+          "No shared trips yet. Generate a plan, then tap Save.",
+          "muted text-xs py-4 text-center",
+        ),
+      );
+      return;
+    }
     for (const trip of sharedTrips) {
       box.append(
         renderSharedTripRow(trip, {
@@ -1178,23 +1187,8 @@ function renderSaved() {
     return;
   }
 
-  const cached = readSharedTripsCache(localStorage);
-  if (cached && cached.length) {
-    for (const trip of cached) {
-      box.append(
-        renderSharedTripRow(trip, {
-          onLoad: (t) => openSharedTrip(t),
-          onDelete: (t) => deleteSharedTrip(t),
-        }),
-      );
-    }
-    return;
-  }
-
-  let trips = [];
-  try {
-    trips = readTrips(localStorage);
-  } catch {}
+  // Only fall back to legacy/local storage if NO shared snapshot has ever existed
+  const trips = readAll();
   if (!trips.length) {
     box.append(
       el(
@@ -1291,6 +1285,7 @@ function deleteSharedTrip(trip) {
       readTrips(localStorage).filter((t) => t.id !== tripId),
     );
     sharedTrips = sharedTrips.filter((t) => (t.tripId || t.id) !== tripId);
+    hasSharedSnapshot = true;
     writeSharedTripsCache(localStorage, sharedTrips);
     badge();
     renderSaved();
@@ -1689,6 +1684,7 @@ syncVibes();
 const cachedShared = readSharedTripsCache(localStorage);
 if (cachedShared !== null) {
   sharedTrips = cachedShared;
+  hasSharedSnapshot = true;
 }
 updatePartnerIdentityUI();
 badge();

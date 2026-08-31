@@ -1263,3 +1263,147 @@ test("Offline shared-trip cache persists descriptors across restarts", async () 
 
   app.dom.window.close();
 });
+
+test("Authoritative empty Shared Trips snapshot overrides stale local trips and persists across restarts", async () => {
+  const staleLocalTrips = {
+    version: 2,
+    trips: [
+      {
+        id: "trip-stale-a",
+        destination: "Stale Manila",
+        trip: { destination: "Stale Manila", mode: "itinerary", days: 2, people: 2 },
+        result: { parts: [{ text: "Manila" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+        savedItems: [],
+      },
+      {
+        id: "trip-stale-b",
+        destination: "Stale Baguio",
+        trip: { destination: "Stale Baguio", mode: "itinerary", days: 2, people: 2 },
+        result: { parts: [{ text: "Baguio" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+        savedItems: [],
+      },
+    ],
+  };
+
+  // Run 1: Local device has stale trips A & B, but Sheets authoritative list_trips returns []
+  const app1 = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_trips_v2: JSON.stringify(staleLocalTrips),
+    },
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "list_trips") {
+        return Response.json({ status: "success", trips: [] });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  await tick();
+  await tick();
+  await tick();
+  await tick();
+
+  // Shared trips badge must be 0
+  assert.equal(app1.$("savedCountBadge").textContent, "0");
+
+  // Open modal: must NOT render stale Trip A or Trip B
+  app1.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
+  await tick();
+  await tick();
+
+  const rows1 = app1.$("savedTripsList").querySelectorAll(".shared-trip-row");
+  assert.equal(rows1.length, 0);
+  assert.ok(app1.$("savedTripsList").textContent.includes("No shared trips yet"));
+  assert.ok(!app1.$("savedTripsList").textContent.includes("Stale Manila"));
+  assert.ok(!app1.$("savedTripsList").textContent.includes("Stale Baguio"));
+
+  const storageAfterRun1 = {
+    saantayo_partner_identity_v1: app1.dom.window.localStorage.getItem("saantayo_partner_identity_v1"),
+    saantayo_trips_v2: app1.dom.window.localStorage.getItem("saantayo_trips_v2"),
+    saantayo_shared_trips_v1: app1.dom.window.localStorage.getItem("saantayo_shared_trips_v1"),
+  };
+  app1.dom.window.close();
+
+  // Run 2: Reload with backend offline / network failure
+  const app2 = await setup({
+    initial: storageAfterRun1,
+    sheetsHandler: () => {
+      throw new Error("Network offline / 500");
+    },
+  });
+
+  await tick();
+  await tick();
+  await tick();
+  await tick();
+
+  // Cached authoritative [] must NOT resurrect stale local trips
+  assert.equal(app2.$("savedCountBadge").textContent, "0");
+  app2.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
+  await tick();
+  await tick();
+
+  const rows2 = app2.$("savedTripsList").querySelectorAll(".shared-trip-row");
+  assert.equal(rows2.length, 0);
+  assert.ok(app2.$("savedTripsList").textContent.includes("No shared trips yet"));
+  assert.ok(!app2.$("savedTripsList").textContent.includes("Stale Manila"));
+  assert.ok(!app2.$("savedTripsList").textContent.includes("Stale Baguio"));
+
+  app2.dom.window.close();
+});
+
+test("Compatibility regression — current.savedItems contains all types while current.stays contains stays only", async () => {
+  const mixedItems = [
+    { itemId: "item-stay", tripId: "mixed-trip-1", itemType: "stay", name: "Crimson Resort", price: "₱8,000", savedBy: "Glen" },
+    { itemId: "item-food", tripId: "mixed-trip-1", itemType: "food", name: "Lantaw Restaurant", price: "₱600", savedBy: "Anne" },
+    { itemId: "item-act", tripId: "mixed-trip-1", itemType: "activity", name: "Island Hopping Tour", price: "₱1,500", savedBy: "Glen" },
+    { itemId: "item-trans", tripId: "mixed-trip-1", itemType: "transport", name: "Cebu Airport Taxi", price: "₱400", savedBy: "Anne" },
+  ];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_trips_v2: JSON.stringify({
+        version: 2,
+        trips: [
+          {
+            id: "mixed-trip-1",
+            destination: "Cebu",
+            trip: { destination: "Cebu", mode: "itinerary", days: 3, people: 2 },
+            result: { parts: [{ text: "Cebu Trip" }], sources: [], createdAt: "2026-08-31", expiresAt: "2099-01-01T00:00:00Z" },
+            savedItems: mixedItems,
+          },
+        ],
+      }),
+    },
+    url: "https://app.example/?trip=mixed-trip-1",
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "get_items") {
+        return Response.json({
+          status: "success",
+          tripId: "mixed-trip-1",
+          items: mixedItems,
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+
+  await tick();
+  await tick();
+
+  // Shortlist UI displays all 4 items
+  assert.equal(app.$("shortlistBadge").textContent, "4");
+
+  // Verify persisted trip in localStorage has universal savedItems (4 items) and stay-only stays (1 item)
+  const localData = JSON.parse(app.dom.window.localStorage.getItem("saantayo_trips_v2"));
+  const persistedTrip = localData.trips.find((t) => t.id === "mixed-trip-1");
+  assert.ok(persistedTrip);
+  assert.equal(persistedTrip.savedItems.length, 4);
+  assert.equal(persistedTrip.stays.length, 1);
+  assert.equal(persistedTrip.stays[0].name, "Crimson Resort");
+  assert.equal(persistedTrip.stays[0].itemType, "stay");
+
+  app.dom.window.close();
+});

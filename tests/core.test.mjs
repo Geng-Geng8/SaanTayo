@@ -937,3 +937,18 @@ test("cross-device Glen and Anne saves normalize into a combined list with disti
   assert.equal(combined[0].savedBy, "Glen");
   assert.equal(combined[1].savedBy, "Anne");
 });
+
+test("mixed items separation — savedItems retains all types while stays retains only stay", () => {
+  const mixed = [
+    { itemId: "s1", itemType: "stay", name: "Hotel", savedBy: "Glen" },
+    { itemId: "f1", itemType: "food", name: "Cafe", savedBy: "Anne" },
+    { itemId: "a1", itemType: "activity", name: "Tour", savedBy: "Glen" },
+    { itemId: "t1", itemType: "transport", name: "Bus", savedBy: "Anne" },
+  ];
+  const normalized = normalizeSavedItems(mixed, "trip-1", "Glen");
+  assert.equal(normalized.length, 4);
+  const staysOnly = normalized.filter((item) => item.itemType === "stay");
+  assert.equal(staysOnly.length, 1);
+  assert.equal(staysOnly[0].itemType, "stay");
+  assert.equal(staysOnly[0].name, "Hotel");
+});
