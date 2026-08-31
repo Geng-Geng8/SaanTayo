@@ -84,3 +84,29 @@ pnpm exec wrangler deploy --dry-run
 Tests use synthetic Google responses, not a live model. `node tests/preview.mjs` serves a labelled fixture preview on port 8788 and never calls Google. For paid verification set `RUN_LIVE_GEMINI=1` and server-side `GEMINI_API_KEY`, then `pnpm test:live` (three requests). It reports metadata only; manually review answers as described in [TESTING](docs/TESTING.md).
 
 For a model update, review Google's current model/version/tool contracts, change Worker `GEMINI_MODEL`, update prompts/contract tests, run live checks, then deploy the Worker. Do not silently fall back to a different model.
+
+## Architecture & Documentation
+
+SaanTayo is a Philippines-focused AI travel planning PWA built with:
+
+* GitHub Pages for the frontend
+* Cloudflare Workers for the AI/API layer
+* Gemini for travel intelligence and itinerary generation
+* Google Apps Script for collaborative synchronization
+* Google Sheets for shared trip and Saved Items storage
+* localStorage for offline/cache fallback
+
+### Saved Items
+
+SaanTayo currently supports synchronized saved:
+
+* Accommodations
+* Food spots
+* Transportation options
+
+Google Sheets is the authoritative source of truth for Saved Items. localStorage is used only as an offline/cache fallback.
+
+### Documentation
+
+* [Application Architecture](docs/architecture.md)
+* [Universal Saved Items + Google Sheets Sync V1](docs/saved-items-v1.md)
