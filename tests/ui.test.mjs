@@ -333,7 +333,7 @@ test("things to do and experiences guide renders activity cards with booking/sea
 
   assert.equal(app.$("activitiesSection").classList.contains("hidden"), false);
   const actCards = app.$("activitiesCardsGrid").querySelectorAll(".activity-card");
-  assert.ok(actCards.length >= 2);
+  assert.ok(actCards.length >= 1);
 
   const firstBadge = actCards[0].querySelector(".activity-category-badge");
   assert.ok(firstBadge);
@@ -345,6 +345,7 @@ test("things to do and experiences guide renders activity cards with booking/sea
   const searchBtn = actCards[0].querySelector(".activity-search-btn");
   assert.ok(searchBtn);
   assert.ok(searchBtn.href.startsWith("https://"));
+  assert.ok(!searchBtn.href.includes("javascript:"));
 
   const pinBtn = actCards[0].querySelector(".pin-btn");
   assert.ok(pinBtn);

@@ -1267,56 +1267,20 @@ export function parseActivities(
 
   if (!result.length) {
     const dest = (destination || "Local Area").trim();
-    result.push(
-      {
-        name: `Island Hopping & Coastal Tours in ${dest}`,
-        location: dest,
-        category: "Island Hopping",
-        description: "Explore surrounding islands, hidden lagoons, and marine sanctuaries.",
-        estimatedPrice: "Check tour rates",
-        bestFor: "Beach lovers & adventure seekers",
-        duration: "Full day / Half day",
-        bookingTip: "Book registered local bangka boats with life vests included.",
-        link: buildActivitySearchLink(`Island Hopping Boat Tours in ${dest}`, dest),
-        isFallback: true,
-      },
-      {
-        name: `Snorkeling & Coral Reef Exploration in ${dest}`,
-        location: dest,
-        category: "Snorkeling",
-        description: "Discover vibrant coral gardens, sea turtles, and rich marine biodiversity.",
-        estimatedPrice: "Check rental rates",
-        bestFor: "Water enthusiasts",
-        duration: "2-3 Hours",
-        bookingTip: "Rent gear locally or bring your own snorkel mask.",
-        link: buildActivitySearchLink(`Snorkeling and Diving in ${dest}`, dest),
-        isFallback: true,
-      },
-      {
-        name: `Cultural & Heritage Walking Tour in ${dest}`,
-        location: dest,
-        category: "Heritage",
-        description: "Visit historic landmarks, ancestral sites, and colorful town markets.",
-        estimatedPrice: "Free / Nominal entrance",
-        bestFor: "Culture & history lovers",
-        duration: "Half day",
-        bookingTip: "Best explored during the cooler morning or late afternoon hours.",
-        link: buildActivitySearchLink(`Heritage and Cultural Walking Tours in ${dest}`, dest),
-        isFallback: true,
-      },
-      {
-        name: `Nature Trails & Viewpoint Treks in ${dest}`,
-        location: dest,
-        category: "Hiking",
-        description: "Hike scenic peaks, waterfalls, and panoramic vantage points.",
-        estimatedPrice: "Environmental fee / Guide fee",
-        bestFor: "Outdoor enthusiasts",
-        duration: "2-4 Hours",
-        bookingTip: "Wear sturdy footwear and hire a local barangay guide where required.",
-        link: buildActivitySearchLink(`Nature Trails and Viewpoint Hiking in ${dest}`, dest),
-        isFallback: true,
-      },
-    );
+    result.push({
+      name: `Things to Do in ${dest}`,
+      location: dest,
+      category: "Activity",
+      description:
+        "Browse current attractions, cultural sites, and local experiences for this destination.",
+      estimatedPrice: "Check current prices",
+      bestFor: "All travelers",
+      duration: "Varies",
+      bookingTip:
+        "Confirm current hours, availability, prices, and local conditions before booking.",
+      link: buildActivitySearchLink(`things to do in ${dest}`, dest),
+      isFallback: true,
+    });
   }
 
   return result;

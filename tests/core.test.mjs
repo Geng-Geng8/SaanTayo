@@ -770,17 +770,64 @@ Enjoy your trip!
   assert.ok(stripped.includes("Enjoy your trip!"));
 });
 
-test("parseActivities fallback provides generic discovery categories and no fabricated tours", () => {
+test("parseActivities fallback provides neutral destination-safe discovery without false geographic claims", () => {
   const fallback = parseActivities("No structured block present", {
-    destination: "Coron",
+    destination: "Baguio",
   });
-  assert.ok(fallback.length >= 4);
-  assert.ok(fallback.every((a) => a.isFallback === true));
-  assert.ok(fallback.some((a) => a.category === "Island Hopping"));
-  assert.ok(fallback.some((a) => a.category === "Snorkeling"));
-  assert.ok(fallback.some((a) => a.category === "Heritage"));
-  assert.ok(fallback.some((a) => a.category === "Hiking"));
-  assert.ok(fallback.every((a) => typeof a.link === "string" && a.link.startsWith("https://")));
+  assert.equal(fallback.length, 1);
+  assert.equal(fallback[0].isFallback, true);
+  assert.equal(fallback[0].name, "Things to Do in Baguio");
+  assert.equal(fallback[0].location, "Baguio");
+  assert.equal(fallback[0].category, "Activity");
+  assert.ok(fallback[0].link.startsWith("https://"));
+
+  // Must not make unsupported geographic claims for inland destinations
+  const allText = `${fallback[0].name} ${fallback[0].category} ${fallback[0].description} ${fallback[0].bookingTip}`.toLowerCase();
+  assert.ok(!allText.includes("island hopping"));
+  assert.ok(!allText.includes("snorkeling"));
+  assert.ok(!allText.includes("diving"));
+  assert.ok(!allText.includes("beach"));
+  assert.ok(!allText.includes("coastal"));
+});
+
+test("parseActivities fails safely on malformed JSON and produces neutral discovery fallback", () => {
+  const malformed = `
+\`\`\`activities
+[
+  { "name": "Broken Activity", "location":
+\`\`\`
+`;
+  const fallback = parseActivities(malformed, { destination: "Sagada" });
+  assert.equal(fallback.length, 1);
+  assert.equal(fallback[0].isFallback, true);
+  assert.equal(fallback[0].name, "Things to Do in Sagada");
+  assert.equal(fallback[0].category, "Activity");
+  assert.ok(fallback[0].link.startsWith("https://"));
+});
+
+test("parseActivities rejects javascript: URLs and sanitizes unsafe links", () => {
+  const unsafeSample = `
+\`\`\`activities
+[
+  {
+    "name": "Intramuros Night Walking Tour",
+    "location": "Manila",
+    "category": "Heritage",
+    "description": "Historic walking tour inside the walled city.",
+    "estimatedPrice": "₱300 / person",
+    "bestFor": "History lovers",
+    "duration": "2 Hours",
+    "bookingTip": "Wear comfortable walking shoes.",
+    "link": "javascript:alert(1)"
+  }
+]
+\`\`\`
+`;
+  const activities = parseActivities(unsafeSample, { destination: "Manila" });
+  assert.equal(activities.length, 1);
+  assert.equal(activities[0].name, "Intramuros Night Walking Tour");
+  assert.ok(!activities[0].link.toLowerCase().includes("javascript:"));
+  assert.ok(activities[0].link.startsWith("https://"));
 });
 
 test("canonicalizeSavedItem correctly parses activity items with all metadata fields", () => {
