@@ -5,8 +5,10 @@ import {
   stripTransitBlock,
   stripDiningBlock,
   stripAccommodationsBlock,
+  stripActivitiesBlock,
   buildMapsSearchLink,
   buildStaySearchLink,
+  buildActivitySearchLink,
 } from "../shared/travel.js";
 
 marked.use({ breaks: true, gfm: true });
@@ -135,9 +137,13 @@ export function renderShortlistItem(item, { onDelete } = {}) {
       ? `🍽️ Must Try: ${item.details.mustTryDish}`
       : item.details?.localTip
         ? `💡 ${item.details.localTip}`
-        : item.details?.description
-          ? item.details.description
-          : null;
+        : item.details?.bookingTip
+          ? `🎟️ Tip: ${item.details.bookingTip}`
+          : item.details?.bestFor
+            ? `✨ Best for: ${item.details.bestFor}`
+            : item.details?.description
+              ? item.details.description
+              : null;
 
   if (detailSnippet) {
     const detailEl = el(
@@ -158,6 +164,118 @@ export function renderShortlistItem(item, { onDelete } = {}) {
 
   row.append(content, delBtn);
   return row;
+}
+
+export function renderActivityCard(
+  activity,
+  { onPin, isPinned = false } = {},
+) {
+  const card = el("div", null, "activity-card");
+
+  const header = el("div", null, "activity-header-row");
+  const catKey = (activity.category || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+  const catClass = `activity-cat-${catKey}`;
+  const catBadge = el(
+    "span",
+    activity.category || "Activity",
+    `activity-category-badge ${catClass}`,
+  );
+
+  const priceChip = el(
+    "span",
+    activity.estimatedPrice || "Check prices",
+    "activity-price-chip",
+  );
+
+  const pinBtn = el(
+    "button",
+    isPinned ? "✓ Saved" : "📌 Save",
+    `activity-pin-btn pin-btn ${isPinned ? "pinned" : ""}`,
+  );
+  pinBtn.type = "button";
+  pinBtn.setAttribute(
+    "aria-label",
+    `Save ${activity.name || "activity"} to shortlist`,
+  );
+  if (onPin) {
+    pinBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onPin(activity);
+    });
+  }
+
+  header.append(catBadge, priceChip, pinBtn);
+
+  const nameGroup = el("div", null, "space-y-0.5");
+  const name = el(
+    "div",
+    activity.name || "Curated Experience",
+    "activity-name",
+  );
+  const location = el(
+    "div",
+    `📍 ${activity.location || "Local Area"}`,
+    "activity-location",
+  );
+  nameGroup.append(name, location);
+
+  const desc = el(
+    "div",
+    activity.description || "A celebrated local experience and highlight.",
+    "activity-description",
+  );
+
+  const metaRow = el("div", null, "activity-meta-row");
+  if (activity.duration) {
+    const durChip = el(
+      "span",
+      `⏱️ ${activity.duration}`,
+      "activity-chip activity-chip-duration",
+    );
+    metaRow.append(durChip);
+  }
+  if (activity.bestFor) {
+    const bestChip = el(
+      "span",
+      `✨ ${activity.bestFor}`,
+      "activity-chip activity-chip-bestfor",
+    );
+    metaRow.append(bestChip);
+  }
+
+  const tip = activity.bookingTip
+    ? el("div", `💡 ${activity.bookingTip}`, "activity-tip")
+    : null;
+
+  const searchUrl =
+    activity.link ||
+    buildActivitySearchLink(activity.name, activity.location);
+
+  const actionsRow = el("div", null, "activity-actions-row");
+  const searchBtn = el("a", null, "activity-search-btn");
+  searchBtn.href =
+    searchUrl ||
+    `https://www.google.com/search?q=${encodeURIComponent((activity.name || "") + " " + (activity.location || "") + " tour booking")}`;
+  searchBtn.target = "_blank";
+  searchBtn.rel = "noopener noreferrer";
+  searchBtn.setAttribute(
+    "aria-label",
+    `Check booking and details for ${activity.name}`,
+  );
+  const searchIcon = el("span", "🔍");
+  const searchLabel = el("span", "Explore & Book");
+  searchBtn.append(searchIcon, searchLabel);
+
+  actionsRow.append(searchBtn);
+
+  card.append(header, nameGroup, desc);
+  if (metaRow.children.length) card.append(metaRow);
+  if (tip) card.append(tip);
+  card.append(actionsRow);
+
+  return card;
 }
 export function renderTransitCard(leg, { onPin, isPinned = false } = {}) {
   const card = el("div", null, "transit-card");
@@ -403,8 +521,8 @@ export function renderStayCard(stay, { onPin, isPinned = false } = {}) {
 }
 export function markdown(text) {
   const node = el("div", null, "prose");
-  const cleanText = stripAccommodationsBlock(
-    stripDiningBlock(stripTransitBlock(text)),
+  const cleanText = stripActivitiesBlock(
+    stripAccommodationsBlock(stripDiningBlock(stripTransitBlock(text))),
   );
   node.innerHTML = DOMPurify.sanitize(marked.parse(cleanText), {
     ALLOWED_TAGS: [

@@ -29,6 +29,10 @@ import {
   ITEM_TYPES,
   canonicalizeSavedItem,
   normalizeSavedItems,
+  ACTIVITY_CATEGORIES,
+  buildActivitySearchLink,
+  stripActivitiesBlock,
+  parseActivities,
 } from "../shared/travel.js";
 import {
   readTrips,
@@ -696,14 +700,114 @@ test("normalizeSavedItems ignores corrupt/null entries and sanitizes rows", () =
     "not-an-object",
     { StayID: "s1", HotelName: "=SUM(1,2)", Price: "+₱100" },
     { ItemID: "f1", ItemType: "food", Name: "@danger", Category: "Cafe" },
+    { ItemID: "a1", ItemType: "activity", Name: "Island Hopping Tour A", Category: "Island Hopping" },
   ];
 
   const clean = normalizeSavedItems(mixed, "fallback-trip");
-  assert.equal(clean.length, 2);
+  assert.equal(clean.length, 3);
   assert.equal(clean[0].itemId, "s1");
   assert.equal(clean[0].name, "=SUM(1,2)");
   assert.equal(clean[0].price, "+₱100");
   assert.equal(clean[1].itemId, "f1");
   assert.equal(clean[1].itemType, "food");
   assert.equal(clean[1].name, "@danger");
+  assert.equal(clean[2].itemId, "a1");
+  assert.equal(clean[2].itemType, "activity");
+});
+
+test("parseActivities parses structured activities blocks and stripActivitiesBlock cleans text", () => {
+  const sample = `
+Here is your El Nido adventure plan.
+
+\`\`\`activities
+[
+  {
+    "name": "Bacuit Bay Island Hopping Tour A",
+    "location": "Miniloc Island & Big Lagoon",
+    "category": "Island Hopping",
+    "description": "Paddle through turquoise waters and limestone karst formations.",
+    "estimatedPrice": "₱1,200 / person",
+    "bestFor": "Adventure seekers & photographers",
+    "duration": "Full Day (8:30 AM - 4:00 PM)",
+    "bookingTip": "Pre-book kayaking permit for Big Lagoon.",
+    "link": "https://example.com/tour-a"
+  },
+  {
+    "name": "Taraw Cliff Canopy Walk",
+    "location": "El Nido Town",
+    "category": "Hiking",
+    "description": "Suspended canopy bridge with panoramic view of Bacuit Bay.",
+    "estimatedPrice": "₱400 / person",
+    "bestFor": "Active travelers",
+    "duration": "1-2 Hours",
+    "bookingTip": "Wear rubber shoes; harness provided."
+  }
+]
+\`\`\`
+
+Enjoy your trip!
+`;
+
+  const activities = parseActivities(sample, { destination: "El Nido" });
+  assert.equal(activities.length, 2);
+  assert.equal(activities[0].name, "Bacuit Bay Island Hopping Tour A");
+  assert.equal(activities[0].location, "Miniloc Island & Big Lagoon");
+  assert.equal(activities[0].category, "Island Hopping");
+  assert.equal(activities[0].estimatedPrice, "₱1,200 / person");
+  assert.equal(activities[0].bestFor, "Adventure seekers & photographers");
+  assert.equal(activities[0].duration, "Full Day (8:30 AM - 4:00 PM)");
+  assert.equal(activities[0].bookingTip, "Pre-book kayaking permit for Big Lagoon.");
+  assert.equal(activities[0].link, "https://example.com/tour-a");
+
+  assert.equal(activities[1].name, "Taraw Cliff Canopy Walk");
+  assert.equal(activities[1].category, "Hiking");
+  assert.ok(activities[1].link.includes("google.com/search"));
+
+  const stripped = stripActivitiesBlock(sample);
+  assert.ok(!stripped.includes("```activities"));
+  assert.ok(!stripped.includes("Bacuit Bay"));
+  assert.ok(stripped.includes("Here is your El Nido adventure plan."));
+  assert.ok(stripped.includes("Enjoy your trip!"));
+});
+
+test("parseActivities fallback provides generic discovery categories and no fabricated tours", () => {
+  const fallback = parseActivities("No structured block present", {
+    destination: "Coron",
+  });
+  assert.ok(fallback.length >= 4);
+  assert.ok(fallback.every((a) => a.isFallback === true));
+  assert.ok(fallback.some((a) => a.category === "Island Hopping"));
+  assert.ok(fallback.some((a) => a.category === "Snorkeling"));
+  assert.ok(fallback.some((a) => a.category === "Heritage"));
+  assert.ok(fallback.some((a) => a.category === "Hiking"));
+  assert.ok(fallback.every((a) => typeof a.link === "string" && a.link.startsWith("https://")));
+});
+
+test("canonicalizeSavedItem correctly parses activity items with all metadata fields", () => {
+  const rawActivity = {
+    itemId: "act-1",
+    tripId: "trip-99",
+    itemType: "activity",
+    name: "Kayangan Lake Snorkel Tour",
+    location: "Coron Island",
+    category: "Snorkeling",
+    estimatedPrice: "₱1,500",
+    detailsJSON: JSON.stringify({
+      description: "Crystal-clear brackish lake surrounded by karst cliffs.",
+      duration: "Half Day",
+      bestFor: "Swimmers and families",
+      bookingTip: "Life vests mandatory in the lake.",
+    }),
+  };
+
+  const item = canonicalizeSavedItem(rawActivity);
+  assert.equal(item.itemId, "act-1");
+  assert.equal(item.tripId, "trip-99");
+  assert.equal(item.itemType, "activity");
+  assert.equal(item.name, "Kayangan Lake Snorkel Tour");
+  assert.equal(item.category, "Snorkeling");
+  assert.equal(item.price, "₱1,500");
+  assert.equal(item.details.duration, "Half Day");
+  assert.equal(item.details.bestFor, "Swimmers and families");
+  assert.equal(item.details.bookingTip, "Life vests mandatory in the lake.");
 });

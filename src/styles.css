@@ -929,6 +929,142 @@ summary {
   text-decoration: none;
 }
 
+/* Activities & Experiences Section */
+.activity-panel {
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: linear-gradient(180deg, rgba(15, 12, 29, 0.6) 0%, rgba(10, 15, 29, 0.95) 100%);
+}
+.activity-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  font-size: 0.95rem;
+}
+.activity-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 0.85rem;
+  transition: all 0.2s ease;
+}
+.activity-card:hover {
+  border-color: rgba(168, 85, 247, 0.5);
+  transform: translateY(-1px);
+}
+.activity-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.activity-category-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(168, 85, 247, 0.15);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.activity-price-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+}
+.activity-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+}
+.activity-location {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.activity-description {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+.activity-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+}
+.activity-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid #334155;
+  color: #cbd5e1;
+}
+.activity-chip-duration {
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.1);
+}
+.activity-chip-bestfor {
+  color: #fbcfe8;
+  border-color: rgba(244, 114, 182, 0.3);
+  background: rgba(244, 114, 182, 0.1);
+}
+.activity-tip {
+  font-size: 0.76rem;
+  color: #e9d5ff;
+  background: rgba(168, 85, 247, 0.1);
+  border-left: 2px solid #a855f7;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0 0.45rem 0.45rem 0;
+  line-height: 1.45;
+}
+.activity-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.activity-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  border-radius: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+.activity-search-btn:hover {
+  border-color: #a855f7;
+  color: #d8b4fe;
+  background: #150d24;
+  text-decoration: none;
+}
+
 /* Shortlist Drawer & Pinned Stays */
 .shortlist-drawer {
   background: #090d16;

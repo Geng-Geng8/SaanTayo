@@ -327,6 +327,30 @@ test("culinary and dining guide renders dining cards with map deep links", async
 
   app.dom.window.close();
 });
+test("things to do and experiences guide renders activity cards with booking/search links and pin buttons", async () => {
+  const app = await setup();
+  await app.generate();
+
+  assert.equal(app.$("activitiesSection").classList.contains("hidden"), false);
+  const actCards = app.$("activitiesCardsGrid").querySelectorAll(".activity-card");
+  assert.ok(actCards.length >= 2);
+
+  const firstBadge = actCards[0].querySelector(".activity-category-badge");
+  assert.ok(firstBadge);
+  assert.ok(firstBadge.textContent.length > 0);
+
+  const priceChip = actCards[0].querySelector(".activity-price-chip");
+  assert.ok(priceChip);
+
+  const searchBtn = actCards[0].querySelector(".activity-search-btn");
+  assert.ok(searchBtn);
+  assert.ok(searchBtn.href.startsWith("https://"));
+
+  const pinBtn = actCards[0].querySelector(".pin-btn");
+  assert.ok(pinBtn);
+
+  app.dom.window.close();
+});
 test("pinned stays shortlist opens drawer, pins stays, and deletes stays", async () => {
   const app = await setup();
   await app.generate();
@@ -785,36 +809,44 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
   await tick();
   await tick();
 
-  // 3. Pin a Transit leg
+  // 3. Pin an Activity
+  const actPinBtns = app.$("activitiesCardsGrid").querySelectorAll(".pin-btn");
+  assert.ok(actPinBtns.length > 0);
+  actPinBtns[0].click();
+  await tick();
+  await tick();
+
+  // 4. Pin a Transit leg
   const transitPinBtns = app.$("transitCardsGrid").querySelectorAll(".pin-btn");
   assert.ok(transitPinBtns.length > 0);
   transitPinBtns[0].click();
   await tick();
   await tick();
 
-  // Shortlist badge should show 3 items
-  assert.equal(app.$("shortlistBadge").textContent, "3");
+  // Shortlist badge should show 4 items
+  assert.equal(app.$("shortlistBadge").textContent, "4");
 
   // Open Shortlist drawer and inspect type pills
   app.$("openShortlistBtn").click();
   const items = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
-  assert.equal(items.length, 3);
+  assert.equal(items.length, 4);
 
   const typePills = app.$("shortlistItemsList").querySelectorAll(".shortlist-type-pill");
-  assert.equal(typePills.length, 3);
+  assert.equal(typePills.length, 4);
   const pillTexts = [...typePills].map((p) => p.textContent.trim().toLowerCase());
   assert.ok(pillTexts.some((t) => t.includes("stay")));
   assert.ok(pillTexts.some((t) => t.includes("food")));
+  assert.ok(pillTexts.some((t) => t.includes("activity")));
   assert.ok(pillTexts.some((t) => t.includes("transit")));
 
   // Delete the food item
   const delBtns = app.$("shortlistItemsList").querySelectorAll(".shortlist-delete-btn");
-  assert.equal(delBtns.length, 3);
+  assert.equal(delBtns.length, 4);
   delBtns[1].click();
   await tick();
   await tick();
 
-  assert.equal(app.$("shortlistBadge").textContent, "2");
+  assert.equal(app.$("shortlistBadge").textContent, "3");
 
   app.dom.window.close();
 });

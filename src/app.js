@@ -15,6 +15,8 @@ import {
   buildMapsSearchLink,
   parseAccommodations,
   buildStaySearchLink,
+  parseActivities,
+  buildActivitySearchLink,
   canonicalizeSavedItem,
   normalizeSavedItems,
 } from "../shared/travel.js";
@@ -35,6 +37,7 @@ import {
   renderTransitCard,
   renderTransitLinkButton,
   renderDiningCard,
+  renderActivityCard,
   renderStayCard,
 } from "./render.js";
 
@@ -276,6 +279,11 @@ function showCurrent() {
     current.legacy || current.expired || current.trip?.mode !== "itinerary",
   );
   renderDining();
+  $("activitiesSection").classList.toggle(
+    "hidden",
+    current.legacy || current.expired || current.trip?.mode !== "itinerary",
+  );
+  renderActivities();
   activeStayFilter = current.trip?.stayType || "all";
   $("accommodationSection").classList.toggle(
     "hidden",
@@ -379,6 +387,25 @@ function renderDining() {
           (spot.spotName || spot.name || "").toLowerCase(),
     );
     grid.append(renderDiningCard(spot, { onPin: pinDining, isPinned }));
+  }
+}
+function renderActivities() {
+  if (!current?.trip) return;
+  const rawText = planText();
+  const activities = parseActivities(rawText, {
+    destination: current.trip.destination || current.destination,
+  });
+
+  const grid = $("activitiesCardsGrid");
+  if (!grid) return;
+  grid.replaceChildren();
+  for (const act of activities) {
+    const isPinned = savedItems.some(
+      (s) =>
+        s.itemType === "activity" &&
+        s.name?.toLowerCase() === (act.name || "").toLowerCase(),
+    );
+    grid.append(renderActivityCard(act, { onPin: pinActivity, isPinned }));
   }
 }
 function renderAccommodations() {
@@ -643,6 +670,7 @@ async function saveItem(rawItem) {
   renderShortlist();
   renderAccommodations();
   renderDining();
+  renderActivities();
   renderTransit();
   toast(`Saved "${canonical.name}" to Shortlist!`);
 
@@ -681,6 +709,7 @@ async function saveItem(rawItem) {
       renderShortlist();
       renderAccommodations();
       renderDining();
+      renderActivities();
       renderTransit();
     } else {
       await loadSavedItemsFromSheets(tripId);
@@ -706,6 +735,7 @@ async function deleteItem(itemId) {
   renderShortlist();
   renderAccommodations();
   renderDining();
+  renderActivities();
   renderTransit();
   toast("Removed item from Shortlist.");
 
@@ -732,6 +762,7 @@ async function deleteItem(itemId) {
       renderShortlist();
       renderAccommodations();
       renderDining();
+      renderActivities();
       renderTransit();
     } else {
       await loadSavedItemsFromSheets(tripId);
@@ -778,6 +809,31 @@ async function pinDining(spot) {
     details: {
       mustTryDish: spot.mustTryDish || "",
       description: spot.description || "",
+    },
+  });
+}
+
+async function pinActivity(activity) {
+  const name = activity.name || "Curated Activity";
+  const price = activity.estimatedPrice || "Check prices";
+  const link =
+    activity.link ||
+    buildActivitySearchLink(
+      name,
+      activity.location || current?.trip?.destination || "",
+    );
+  await saveItem({
+    itemType: "activity",
+    name,
+    location: activity.location || current?.trip?.destination || "",
+    category: activity.category || "Activity",
+    price,
+    link,
+    details: {
+      description: activity.description || "",
+      duration: activity.duration || "",
+      bestFor: activity.bestFor || "",
+      bookingTip: activity.bookingTip || "",
     },
   });
 }
@@ -889,6 +945,7 @@ async function loadSavedItemsFromSheets(tripId) {
       renderShortlist();
       renderAccommodations();
       renderDining();
+      renderActivities();
       renderTransit();
       return savedItems;
     }
@@ -980,6 +1037,7 @@ async function loadTripFromUrl() {
       renderShortlist();
       renderAccommodations();
       renderDining();
+      renderActivities();
       renderTransit();
       $("connectionStatus").textContent =
         "Offline · showing cached trip and saved items.";
