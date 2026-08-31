@@ -1629,7 +1629,7 @@ async function connection() {
     const data = await response.json();
     ready = response.ok && data.ready;
     $("connectionStatus").textContent = ready
-      ? "Ready for travel research · saved plans stay on this device"
+      ? "Shared workspace ready · saved trips sync across devices"
       : "Research setup needed · saved plans and checklist still work.";
   } catch {
     $("connectionStatus").textContent =
