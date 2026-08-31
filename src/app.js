@@ -1,4 +1,23 @@
-import { VIBES, validateTrip, calculateBudget } from "../shared/travel.js";
+import {
+  VIBES,
+  STAY_TYPES,
+  validateTrip,
+  calculateBudget,
+  safeUrl,
+  buildAllProviderLinks,
+  parseTransitLegs,
+  buildTransitLinks,
+  SHEETS_API_URL,
+  cleanTripPayload,
+  fetchSheetsApi,
+  parseStayNameFromUrl,
+  parseDining,
+  buildMapsSearchLink,
+  parseAccommodations,
+  buildStaySearchLink,
+  canonicalizeSavedItem,
+  normalizeSavedItems,
+} from "../shared/travel.js";
 import {
   readTrips,
   writeTrips,
@@ -7,13 +26,27 @@ import {
   exportEligible,
   importTripsData,
 } from "./storage.js";
-import { el, link, renderAnswer } from "./render.js";
+import {
+  el,
+  link,
+  renderAnswer,
+  renderProviderCard,
+  renderShortlistItem,
+  renderTransitCard,
+  renderTransitLinkButton,
+  renderDiningCard,
+  renderStayCard,
+} from "./render.js";
 
-const $ = (id) => document.getElementById(id);
+const $ = (id) =>
+  typeof document !== "undefined" ? document.getElementById(id) : null;
 const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
+  activeStayFilter = "all",
   current = null,
+  savedItems = [],
+  pinnedStays = savedItems,
   controller = null,
   fx = null,
   toastTimer,
@@ -126,6 +159,7 @@ function formTrip() {
     days: Number($("tripDays").value),
     people: Number($("people").value),
     party: document.querySelector('input[name="party"]:checked').value,
+    stayType: $("stayType").value,
     vibes: selectedVibes,
     currency: $("currencyPref").value,
     free: $("freeSightseeing").checked,
@@ -232,6 +266,22 @@ function showCurrent() {
     "hidden",
     current.legacy || current.expired || current.trip?.mode !== "itinerary",
   );
+  $("transitSection").classList.toggle(
+    "hidden",
+    current.legacy || current.expired || current.trip?.mode !== "itinerary",
+  );
+  renderTransit();
+  $("diningSection").classList.toggle(
+    "hidden",
+    current.legacy || current.expired || current.trip?.mode !== "itinerary",
+  );
+  renderDining();
+  activeStayFilter = current.trip?.stayType || "all";
+  $("accommodationSection").classList.toggle(
+    "hidden",
+    current.legacy || current.expired || current.trip?.mode !== "itinerary",
+  );
+  renderAccommodations();
   $("chatSection").classList.toggle("hidden", !!current.expired);
   renderChat();
   renderBudget();
@@ -282,6 +332,114 @@ function currency(value) {
         })
       : "")
   );
+}
+function renderTransit() {
+  if (!current?.trip) return;
+  const rawText = planText();
+  const legs = parseTransitLegs(rawText, {
+    origin: current.trip.origin || "Arrival Base",
+    destination: current.trip.destination,
+  });
+
+  const grid = $("transitCardsGrid");
+  grid.replaceChildren();
+  for (const leg of legs) {
+    const isPinned = savedItems.some(
+      (s) =>
+        s.itemType === "transport" &&
+        s.name?.toLowerCase() === (leg.route || "").toLowerCase(),
+    );
+    grid.append(renderTransitCard(leg, { onPin: pinTransit, isPinned }));
+  }
+
+  const links = buildTransitLinks(
+    current.trip.origin,
+    current.trip.destination,
+  );
+  const linksRow = $("transitLinksRow");
+  linksRow.replaceChildren();
+  for (const item of links) {
+    linksRow.append(renderTransitLinkButton(item));
+  }
+}
+function renderDining() {
+  if (!current?.trip) return;
+  const rawText = planText();
+  const spots = parseDining(rawText, {
+    destination: current.trip.destination || current.destination,
+  });
+
+  const grid = $("diningCardsGrid");
+  grid.replaceChildren();
+  for (const spot of spots) {
+    const isPinned = savedItems.some(
+      (s) =>
+        s.itemType === "food" &&
+        s.name?.toLowerCase() ===
+          (spot.spotName || spot.name || "").toLowerCase(),
+    );
+    grid.append(renderDiningCard(spot, { onPin: pinDining, isPinned }));
+  }
+}
+function renderAccommodations() {
+  if (!current?.trip) return;
+  const trip = current.trip;
+  const stayTypeObj =
+    STAY_TYPES.find((s) => s.id === activeStayFilter) || STAY_TYPES[0];
+
+  $("activeStayBadge").textContent = stayTypeObj.label;
+  for (const b of document.querySelectorAll("[data-stay-filter]")) {
+    const isSelected = b.dataset.stayFilter === activeStayFilter;
+    b.setAttribute("aria-selected", String(isSelected));
+    b.classList.toggle("bg-cyan-500", isSelected);
+    b.classList.toggle("text-slate-950", isSelected);
+    b.classList.toggle("text-slate-400", !isSelected);
+  }
+
+  const rawText = planText();
+  const allStays = parseAccommodations(rawText, {
+    destination: trip.destination || current.destination,
+  });
+
+  let filteredStays = allStays;
+  if (activeStayFilter === "hotel") {
+    filteredStays = allStays.filter((s) => s.type?.toLowerCase() === "hotel");
+  } else if (activeStayFilter === "rental") {
+    filteredStays = allStays.filter((s) => s.type?.toLowerCase() === "rental");
+  } else if (activeStayFilter === "resort_hostel") {
+    filteredStays = allStays.filter((s) =>
+      ["resort", "hostel"].includes(s.type?.toLowerCase()),
+    );
+  }
+
+  if (!filteredStays.length) filteredStays = allStays;
+
+  const grid = $("aiStaysGrid") || $("providerLinksGrid");
+  if (grid) {
+    grid.replaceChildren();
+    for (const item of filteredStays) {
+      const isPinned = savedItems.some(
+        (s) =>
+          s.itemType === "stay" &&
+          (s.name || s.hotelName)?.toLowerCase() ===
+            (item.stayName || item.name)?.toLowerCase(),
+      );
+      grid.append(renderStayCard(item, { onPin: pinStay, isPinned }));
+    }
+  }
+
+  const stayCount = $("stayCountLabel");
+  if (stayCount) {
+    stayCount.textContent = `${filteredStays.length} curated ${filteredStays.length === 1 ? "option" : "options"}`;
+  }
+
+  const dateStr =
+    trip.start && trip.end
+      ? ` · ${trip.start} to ${trip.end}`
+      : ` · ${trip.days} days flexible`;
+  const guestStr = `${trip.people} ${trip.people === 1 ? "traveller" : "travellers"}`;
+  $("stayFilterSummary").textContent =
+    `Viewing ${stayTypeObj.label.toLowerCase()} in ${trip.destination} for ${guestStr}${dateStr}.`;
 }
 function renderBudget() {
   const box = $("budgetOutput");
@@ -409,9 +567,20 @@ async function refreshFx() {
   } catch {}
   renderBudget();
 }
+function syncSavedItemsState(items) {
+  savedItems = normalizeSavedItems(items, current?.id || "");
+  pinnedStays = savedItems;
+  if (current) {
+    current.savedItems = savedItems;
+    current.stays = savedItems.filter((s) => s.itemType === "stay");
+  }
+}
+
 function persistCurrent() {
   if (!current) return;
   current.notes = $("travelNotes").value;
+  current.savedItems = [...savedItems];
+  current.stays = savedItems.filter((s) => s.itemType === "stay");
   current.updatedAt = new Date().toISOString();
   try {
     saveTrip(localStorage, current);
@@ -419,6 +588,402 @@ function persistCurrent() {
     toast("Saved on this device. Open once online before travelling offline.");
   } catch (e) {
     storageError(e);
+  }
+  saveCurrentToSheets();
+}
+async function saveCurrentToSheets() {
+  if (!current) return;
+  if (!current.id) current.id = crypto.randomUUID();
+  const tripId = current.id;
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("trip", tripId);
+    window.history.replaceState({}, "", url.href);
+  } catch {}
+
+  const payload = {
+    action: "save_trip",
+    tripId,
+    destination: current.destination || current.trip?.destination || "Philippines",
+    startDate: current.trip?.start || "",
+    endDate: current.trip?.end || "",
+    tripDataJSON: cleanTripPayload(current),
+  };
+
+  try {
+    await fetchSheetsApi(payload);
+    const syncStatus = $("shortlistSyncStatus");
+    if (syncStatus) syncStatus.textContent = "Google Sheets synced just now";
+  } catch (err) {
+    console.warn("Google Sheets save notice:", err);
+  }
+}
+
+async function saveItem(rawItem) {
+  if (!current) current = {};
+  if (!current.id) current.id = crypto.randomUUID();
+  const tripId = current.id;
+  const canonical = canonicalizeSavedItem(
+    {
+      ...rawItem,
+      tripId,
+      itemId: rawItem.itemId || rawItem.stayId || crypto.randomUUID(),
+    },
+    tripId,
+  );
+
+  // Optimistic local update
+  if (!savedItems.some((s) => s.itemId === canonical.itemId)) {
+    savedItems.unshift(canonical);
+  }
+  syncSavedItemsState(savedItems);
+  try {
+    saveTrip(localStorage, current);
+  } catch {}
+  renderShortlist();
+  renderAccommodations();
+  renderDining();
+  renderTransit();
+  toast(`Saved "${canonical.name}" to Shortlist!`);
+
+  try {
+    const payload = {
+      action: "save_item",
+      itemId: canonical.itemId,
+      stayId: canonical.itemId,
+      tripId,
+      itemType: canonical.itemType,
+      name: canonical.name,
+      hotelName: canonical.name,
+      location: canonical.location,
+      category: canonical.category,
+      price: canonical.price,
+      link: canonical.link,
+      savedBy: canonical.savedBy,
+      status: canonical.status,
+      detailsJSON: JSON.stringify(canonical.details || {}),
+    };
+
+    const res = await fetchSheetsApi(payload);
+    const remoteList = Array.isArray(res?.items)
+      ? res.items
+      : Array.isArray(res?.stays)
+        ? res.stays
+        : Array.isArray(res?.data)
+          ? res.data
+          : null;
+
+    if (remoteList !== null) {
+      syncSavedItemsState(remoteList);
+      try {
+        saveTrip(localStorage, current);
+      } catch {}
+      renderShortlist();
+      renderAccommodations();
+      renderDining();
+      renderTransit();
+    } else {
+      await loadSavedItemsFromSheets(tripId);
+    }
+  } catch (err) {
+    console.warn("Failed to save item to Google Sheets:", err);
+    toast("Saved locally · will sync to Google Sheets when online.");
+  }
+}
+
+async function deleteItem(itemId) {
+  if (!current) return;
+  const tripId = current.id;
+
+  // Optimistic local update
+  savedItems = savedItems.filter(
+    (s) => s.itemId !== itemId && s.stayId !== itemId,
+  );
+  syncSavedItemsState(savedItems);
+  try {
+    saveTrip(localStorage, current);
+  } catch {}
+  renderShortlist();
+  renderAccommodations();
+  renderDining();
+  renderTransit();
+  toast("Removed item from Shortlist.");
+
+  try {
+    const res = await fetchSheetsApi({
+      action: "delete_item",
+      itemId,
+      stayId: itemId,
+      tripId,
+    });
+    const remoteList = Array.isArray(res?.items)
+      ? res.items
+      : Array.isArray(res?.stays)
+        ? res.stays
+        : Array.isArray(res?.data)
+          ? res.data
+          : null;
+
+    if (remoteList !== null) {
+      syncSavedItemsState(remoteList);
+      try {
+        saveTrip(localStorage, current);
+      } catch {}
+      renderShortlist();
+      renderAccommodations();
+      renderDining();
+      renderTransit();
+    } else {
+      await loadSavedItemsFromSheets(tripId);
+    }
+  } catch (err) {
+    console.warn("Failed to delete item from Google Sheets:", err);
+  }
+}
+
+async function pinStay(stay) {
+  const hotelName = stay.stayName || stay.name || "Stay Option";
+  const price = stay.estimatedPricePHP || stay.badge || "Live rates";
+  const link =
+    stay.searchUrl ||
+    stay.url ||
+    buildStaySearchLink(hotelName, stay.neighborhood || "");
+  await saveItem({
+    itemType: "stay",
+    name: hotelName,
+    location: stay.neighborhood || current?.trip?.destination || "",
+    category: stay.type || "Hotel",
+    price,
+    link,
+    details: { description: stay.description || "" },
+  });
+}
+
+async function pinDining(spot) {
+  const spotName = spot.spotName || spot.name || "Local Dining";
+  const price = spot.estimatedCostPHP || "Check menu prices";
+  const link =
+    spot.mapsUrl ||
+    buildMapsSearchLink(
+      spotName,
+      spot.location || current?.trip?.destination || "",
+    );
+  await saveItem({
+    itemType: "food",
+    name: spotName,
+    location: spot.location || current?.trip?.destination || "",
+    category: spot.category || "Restaurant",
+    price,
+    link,
+    details: {
+      mustTryDish: spot.mustTryDish || "",
+      description: spot.description || "",
+    },
+  });
+}
+
+async function pinTransit(leg) {
+  const routeName =
+    leg.route ||
+    `${leg.origin || "Origin"} → ${leg.destination || "Destination"}`;
+  const price = leg.estimatedFarePHP || "Check fare";
+  const links = buildTransitLinks(
+    leg.origin || current?.trip?.origin || "",
+    leg.destination || current?.trip?.destination || "",
+  );
+  const link = links[0]?.url || "";
+  await saveItem({
+    itemType: "transport",
+    name: routeName,
+    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim(),
+    category: leg.mode || "Transit",
+    price,
+    link,
+    details: {
+      paymentMethod: leg.paymentMethod || "Cash only",
+      localTip: leg.localTip || "",
+    },
+  });
+}
+
+const unpinStay = deleteItem;
+
+function renderShortlist({ isLoading = false } = {}) {
+  const badge = $("shortlistBadge");
+  if (badge) {
+    badge.textContent =
+      isLoading && !savedItems.length ? "…" : String(savedItems.length);
+  }
+
+  const container = $("shortlistItemsList");
+  if (!container) return;
+  container.replaceChildren();
+
+  if (isLoading && !savedItems.length) {
+    container.append(
+      el(
+        "p",
+        "Loading saved items from Google Sheets…",
+        "muted text-xs py-4 text-center animate-pulse",
+      ),
+    );
+    return;
+  }
+
+  if (!savedItems.length) {
+    container.append(
+      el(
+        "p",
+        "No saved items yet. Tap 📌 Pin / Save on any stay, food spot, or transit route.",
+        "muted text-xs py-4 text-center",
+      ),
+    );
+    return;
+  }
+
+  for (const item of savedItems) {
+    container.append(renderShortlistItem(item, { onDelete: deleteItem }));
+  }
+}
+async function loadSavedItemsFromSheets(tripId) {
+  if (!tripId) return null;
+  try {
+    let res = null;
+    try {
+      res = await fetchSheetsApi(
+        { action: "get_items", tripId },
+        { method: "GET" },
+      );
+    } catch {}
+
+    if (
+      !res ||
+      (!Array.isArray(res) &&
+        !Array.isArray(res?.items) &&
+        !Array.isArray(res?.data) &&
+        !Array.isArray(res?.stays))
+    ) {
+      res = await fetchSheetsApi(
+        { action: "get_stays", tripId },
+        { method: "GET" },
+      );
+    }
+
+    const rawList = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.stays)
+          ? res.stays
+          : Array.isArray(res?.data)
+            ? res.data
+            : null;
+
+    if (rawList !== null) {
+      syncSavedItemsState(rawList);
+      if (current && (!current.id || current.id === tripId)) {
+        try {
+          saveTrip(localStorage, current);
+        } catch {}
+      }
+      renderShortlist();
+      renderAccommodations();
+      renderDining();
+      renderTransit();
+      return savedItems;
+    }
+  } catch (err) {
+    console.warn("Could not load saved items from Sheets:", err);
+  }
+  return null;
+}
+const loadStaysFromSheets = loadSavedItemsFromSheets;
+
+async function loadTripFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const tripId = params.get("trip");
+  if (!tripId) return;
+
+  // 1. Check local cache first so user sees immediate data if offline or fast-boot
+  let cachedTrip = null;
+  try {
+    const allLocal = readTrips(localStorage);
+    cachedTrip = allLocal.find((t) => t.id === tripId) || null;
+  } catch {}
+
+  if (cachedTrip) {
+    current = expireHistory(cachedTrip).trip;
+    syncSavedItemsState(
+      current.savedItems || current.stays || cachedTrip.savedItems || cachedTrip.stays || [],
+    );
+    showCurrent();
+    renderShortlist();
+  } else {
+    renderShortlist({ isLoading: true });
+  }
+
+  $("connectionStatus").textContent = "Loading shared trip from Google Sheets…";
+  let remoteLoaded = false;
+  try {
+    const res = await fetchSheetsApi(
+      { action: "get_trip", tripId },
+      { method: "GET" },
+    );
+    const rawData =
+      res?.tripDataJSON ||
+      res?.tripData ||
+      res?.trip ||
+      (res?.destination ? res : null);
+
+    if (rawData) {
+      const parsed =
+        typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+      if (parsed && (parsed.result || parsed.trip)) {
+        current = parsed;
+        if (!current.id) current.id = tripId;
+
+        const directItems = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res?.stays)
+            ? res.stays
+            : Array.isArray(parsed?.savedItems)
+              ? parsed.savedItems
+              : Array.isArray(parsed?.stays)
+                ? parsed.stays
+                : null;
+
+        if (directItems !== null) {
+          syncSavedItemsState(directItems);
+        }
+
+        try {
+          saveTrip(localStorage, current);
+        } catch {}
+
+        showCurrent();
+        renderShortlist();
+        toast("Trip itinerary hydrated from Google Sheets.");
+        $("resultsContainer").scrollIntoView({ behavior: "smooth" });
+        remoteLoaded = true;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not hydrate trip from Google Sheets:", err);
+  }
+
+  const remoteItems = await loadSavedItemsFromSheets(tripId);
+  if (remoteItems === null && !remoteLoaded) {
+    if (cachedTrip) {
+      syncSavedItemsState(
+        cachedTrip.savedItems || cachedTrip.stays || current?.savedItems || current?.stays || [],
+      );
+      renderShortlist();
+      renderAccommodations();
+      renderDining();
+      renderTransit();
+      $("connectionStatus").textContent =
+        "Offline · showing cached trip and saved items.";
+    }
   }
 }
 function renderSaved() {
@@ -454,8 +1019,13 @@ function renderSaved() {
       )
         return;
       current = expireHistory(trip).trip;
+      syncSavedItemsState(current.savedItems || current.stays || []);
       $("savedTripsModal").close();
       showCurrent();
+      renderShortlist();
+      if (current.id) {
+        loadSavedItemsFromSheets(current.id);
+      }
       if (current.trip?.currency !== "PHP") refreshFx();
       $("resultsContainer").scrollIntoView({ behavior: "smooth" });
     });
@@ -535,6 +1105,7 @@ $("planner").addEventListener("submit", (event) => {
       costs: null,
     };
     showCurrent();
+    saveCurrentToSheets();
     toast("Plan ready. Save it for your trip.");
     $("resultsContainer").scrollIntoView({ behavior: "smooth" });
     if (trip.currency !== "PHP") refreshFx();
@@ -656,6 +1227,11 @@ for (const button of document.querySelectorAll("[data-vibe]"))
       : [...selectedVibes, v];
     syncVibes();
   });
+for (const button of document.querySelectorAll("[data-stay-filter]"))
+  button.addEventListener("click", () => {
+    activeStayFilter = button.dataset.stayFilter;
+    renderAccommodations();
+  });
 for (const radio of document.querySelectorAll('input[name="party"]'))
   radio.addEventListener("change", () => {
     if (radio.value === "Solo Traveler") $("people").value = "1";
@@ -664,10 +1240,85 @@ for (const radio of document.querySelectorAll('input[name="party"]'))
 for (const button of document.querySelectorAll("[data-dialog]"))
   button.addEventListener("click", () => {
     if (button.dataset.dialog === "savedTripsModal") renderSaved();
-    $(button.dataset.dialog).showModal();
+    if (button.dataset.dialog === "shortlistModal") renderShortlist();
+    $(button.dataset.dialog)?.showModal();
   });
+$("openShortlistBtn")?.addEventListener("click", () => {
+  renderShortlist();
+  $("shortlistModal")?.showModal();
+});
 for (const button of document.querySelectorAll("[data-close]"))
   button.addEventListener("click", () => button.closest("dialog").close());
+$("toggleAddStayBtn")?.addEventListener("click", () => {
+  const form = $("addStayForm");
+  if (!form) return;
+  const isHidden = form.classList.toggle("hidden");
+  if (!isHidden) {
+    $("manualStayLink")?.focus();
+  }
+});
+$("smartPasteStayBtn")?.addEventListener("click", async () => {
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    text = prompt("Paste your stay or hotel link here:") || "";
+  }
+  if (!text || typeof text !== "string" || !text.trim()) {
+    toast("Clipboard is empty. Copy a link first!");
+    return;
+  }
+  const trimmed = text.trim();
+  const linkInput = $("manualStayLink");
+  if (linkInput) linkInput.value = trimmed;
+
+  const parsedName = parseStayNameFromUrl(trimmed);
+  const nameInput = $("manualStayName");
+  if (nameInput && parsedName) {
+    nameInput.value = parsedName;
+  }
+
+  const priceInput = $("manualStayPrice");
+  if (priceInput) {
+    priceInput.focus();
+  }
+
+  toast(
+    parsedName
+      ? `Parsed "${parsedName}"! Enter price to save.`
+      : "Link pasted! Enter property name and price.",
+  );
+});
+$("cancelAddStayBtn")?.addEventListener("click", () => {
+  const form = $("addStayForm");
+  if (!form) return;
+  form.reset();
+  form.classList.add("hidden");
+});
+$("addStayForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const hotelName = $("manualStayName")?.value.trim();
+  if (!hotelName) return;
+  const rawPrice = $("manualStayPrice")?.value.trim();
+  const rawLink = $("manualStayLink")?.value.trim();
+  const price = rawPrice || "Custom listed rate";
+  const link = rawLink ? safeUrl(rawLink) || "" : "";
+
+  const form = $("addStayForm");
+  if (form) {
+    form.reset();
+    form.classList.add("hidden");
+  }
+
+  await saveItem({
+    itemType: "stay",
+    name: hotelName,
+    location: current?.trip?.destination || "",
+    category: "Custom Stay",
+    price,
+    link,
+  });
+});
 $("exportTrips").addEventListener("click", () => {
   try {
     download(
@@ -763,6 +1414,8 @@ try {
 setMode("itinerary");
 syncVibes();
 badge();
+renderShortlist();
+loadTripFromUrl();
 connection();
 window.addEventListener("online", connection);
 window.addEventListener("offline", connection);

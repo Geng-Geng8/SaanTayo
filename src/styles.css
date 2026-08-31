@@ -439,3 +439,627 @@ summary {
   border-radius: 0.75rem 0.75rem 0 0.75rem;
   align-self: flex-end;
 }
+
+/* Stay Filters & Provider Cards */
+.stay-filter-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.stay-filter-btn[aria-selected="true"] {
+  background: #06b6d4 !important;
+  color: #020617 !important;
+  font-weight: 700;
+}
+.stay-filter-btn[aria-selected="false"] {
+  background: transparent;
+  color: #94a3b8;
+}
+.stay-filter-btn[aria-selected="false"]:hover {
+  color: #f8fafc;
+  background: #1e293b;
+}
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+  background: #020617;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  min-height: 58px;
+}
+.provider-card:hover {
+  border-color: #06b6d4;
+  background: #082f49;
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.provider-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.provider-name {
+  font-size: 0.85rem;
+  color: #f1f5f9;
+  font-weight: 700;
+}
+.provider-arrow {
+  color: #22d3ee;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.provider-badge {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  margin-top: 0.2rem;
+}
+.provider-card:hover .provider-badge {
+  color: #67e8f9;
+}
+
+/* AI Curated Stays & Accommodation Styles */
+.stay-panel {
+  border-left: 3px solid #06b6d4;
+}
+.stay-icon-chip {
+  font-size: 1.15rem;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.5rem;
+}
+.stay-card {
+  background: #000000;
+  border: 1px solid #1e293b;
+  border-radius: 0.95rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.stay-card:hover {
+  border-color: #06b6d4;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.12);
+}
+.stay-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.stay-type-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.stay-type-hotel {
+  background: rgba(6, 182, 212, 0.18);
+  color: #67e8f9;
+  border: 1px solid rgba(103, 232, 249, 0.4);
+}
+.stay-type-resort {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.stay-type-rental {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+.stay-type-hostel {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+.stay-type-default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  border: 1px solid rgba(203, 213, 225, 0.4);
+}
+.stay-price-chip {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #67e8f9;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+}
+.stay-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+}
+.stay-neighborhood {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.stay-description {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+.stay-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.stay-search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  border-radius: 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.stay-search-btn:hover {
+  border-color: #06b6d4;
+  color: #67e8f9;
+  background: #0d1b2a;
+  text-decoration: none;
+}
+.stay-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: #67e8f9;
+}
+.stay-pin-btn:hover {
+  background: rgba(6, 182, 212, 0.25);
+  border-color: #06b6d4;
+  color: #ffffff;
+}
+.stay-pin-btn.pinned {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+/* Transit Navigator & Commute Advisory Styles */
+.transit-panel {
+  background: #020617;
+  border: 1px solid #334155;
+}
+.transit-icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  font-size: 1rem;
+}
+.transit-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #000000;
+  border: 1px solid #334155;
+  border-radius: 0.85rem;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+.transit-card:hover {
+  border-color: #a3e635;
+  transform: translateY(-1px);
+}
+.transit-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.transit-mode-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.mode-grab {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+.mode-jeepney {
+  background: rgba(132, 204, 22, 0.18);
+  color: #a3e635;
+  border: 1px solid rgba(163, 230, 53, 0.4);
+}
+.mode-tricycle {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+.mode-ferry {
+  background: rgba(6, 182, 212, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+.mode-bus {
+  background: rgba(99, 102, 241, 0.18);
+  color: #818cf8;
+  border: 1px solid rgba(129, 140, 248, 0.4);
+}
+.mode-train {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+.mode-default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  border: 1px solid rgba(203, 213, 225, 0.4);
+}
+.transit-fare-chip {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #a3e635;
+  background: rgba(163, 230, 53, 0.12);
+  border: 1px solid rgba(163, 230, 53, 0.35);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+}
+.transit-route {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+}
+.transit-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+.transit-payment {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  font-weight: 600;
+}
+.transit-tip {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  background: #090d16;
+  border-left: 2px solid #a3e635;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0 0.45rem 0.45rem 0;
+  line-height: 1.5;
+}
+.transit-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  border-radius: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.transit-link-btn:hover {
+  border-color: #a3e635;
+  color: #a3e635;
+  background: #111a28;
+  text-decoration: none;
+}
+
+/* Local Flavors & Dining Guide Styles */
+.dining-panel {
+  border-left: 3px solid #f59e0b;
+}
+.dining-icon-chip {
+  font-size: 1.15rem;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.5rem;
+}
+.dining-card {
+  background: #000000;
+  border: 1px solid #1e293b;
+  border-radius: 0.95rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.dining-card:hover {
+  border-color: #f59e0b;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.12);
+}
+.dining-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.dining-category-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.dining-cat-street-food {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+.dining-cat-carenderia {
+  background: rgba(234, 88, 12, 0.18);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+.dining-cat-restaurant {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.4);
+}
+.dining-cat-plant-based {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.dining-cat-cafe {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.4);
+}
+.dining-cat-default {
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  border: 1px solid rgba(203, 213, 225, 0.4);
+}
+.dining-price-chip {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.5rem;
+  white-space: nowrap;
+}
+.dining-spot-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+}
+.dining-location {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.dining-dish-pill {
+  font-size: 0.8rem;
+  color: #fef08a;
+  background: rgba(234, 179, 8, 0.1);
+  border-left: 2px solid #f59e0b;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0 0.45rem 0.45rem 0;
+  line-height: 1.45;
+}
+.dining-description {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+.dining-map-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  background: #090d16;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  border-radius: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+.dining-map-btn:hover {
+  border-color: #f59e0b;
+  color: #fbbf24;
+  background: #18120c;
+  text-decoration: none;
+}
+
+/* Shortlist Drawer & Pinned Stays */
+.shortlist-drawer {
+  background: #090d16;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  max-width: 32rem;
+  width: calc(100% - 2rem);
+}
+.shortlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+.shortlist-item:hover {
+  border-color: #06b6d4;
+}
+.shortlist-item-content {
+  flex: 1;
+  min-width: 0;
+}
+.shortlist-item-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.shortlist-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+.shortlist-user-tag {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #67e8f9;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.shortlist-delete-btn {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #fda4af;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.shortlist-delete-btn:hover {
+  background: #450a0a;
+  border-color: #f43f5e;
+  color: #ffffff;
+}
+.pin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 32px;
+}
+.pin-btn:hover {
+  border-color: #06b6d4;
+  color: #22d3ee;
+}
+.pin-btn.pinned {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+  color: #67e8f9;
+}
+.shortlist-type-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.shortlist-type-stay {
+  background: rgba(6, 182, 212, 0.15);
+  color: #67e8f9;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+.shortlist-type-food {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.shortlist-type-transport {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.shortlist-type-activity {
+  background: rgba(168, 85, 247, 0.15);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+.shortlist-type-flight {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.shortlist-type-note {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}

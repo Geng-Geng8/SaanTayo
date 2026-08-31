@@ -61,6 +61,30 @@ test("comparison and research include actual party, preferences and question", a
     assert.match(body.input, /Current ferry/);
   }
 });
+test("stayType preference adapts backend prompt for hotels, rentals, and resorts/hostels", async () => {
+  const types = [
+    { stayType: "hotel", pattern: /hotels/i },
+    { stayType: "rental", pattern: /Airbnb|vacation rentals/i },
+    { stayType: "resort_hostel", pattern: /resorts|hostels/i },
+  ];
+  for (const item of types) {
+    let body;
+    await handleRequest(
+      apiRequest("travel", {
+        trip: { ...trip, stayType: item.stayType },
+      }),
+      env,
+      {},
+      {
+        fetcher: async (u, o) => {
+          body = JSON.parse(o.body);
+          return Response.json(interaction());
+        },
+      },
+    );
+    assert.match(body.input, item.pattern);
+  }
+});
 test("immediate and multiple follow-ups use previous ID, not a growing transcript", async () => {
   let res = await handleRequest(
     apiRequest("travel", { trip }),

@@ -69,6 +69,20 @@
       </div>
       <div class="flex items-center gap-1.5 sm:gap-2">
         <button
+          id="openShortlistBtn"
+          data-dialog="shortlistModal"
+          aria-label="Pinned stays shortlist"
+          class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 hover:text-cyan-200 border border-cyan-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950/60 cursor-pointer"
+        >
+          <span class="text-sm" aria-hidden="true">📌</span>
+          <span class="font-bold">Shortlist</span>
+          <span
+            id="shortlistBadge"
+            class="bg-cyan-500/25 text-cyan-200 border border-cyan-400/40 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+            >0</span
+          >
+        </button>
+        <button
           data-dialog="savedTripsModal"
           aria-label="Saved trips"
           class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
@@ -224,6 +238,15 @@
               <option value="PHP">PHP only</option>
             </select>
           </div>
+        </div>
+        <div>
+          <label for="stayType">Stay / Accommodation Type</label
+          ><select id="stayType">
+            <option value="all">All Accommodations</option>
+            <option value="hotel">Hotels Only</option>
+            <option value="rental">Airbnb / Vacation Rentals</option>
+            <option value="resort_hostel">Resorts / Hostels</option>
+          </select>
         </div>
         <!-- Itemized Cost Controls -->
         <div
@@ -530,6 +553,146 @@
           class="bg-slate-900 border border-slate-800 rounded-2xl p-5 prose prose-invert text-slate-200 text-sm max-w-none shadow-2xl leading-relaxed"
         ></div>
 
+        <!-- Getting Around & Local Transit Section -->
+        <section id="transitSection" class="panel transit-panel space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="transit-icon-chip" aria-hidden="true">🧭</span>
+              <h2>Getting Around & Local Transit</h2>
+            </div>
+            <span
+              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-lime-500/20 text-lime-300 border border-lime-500/40 uppercase tracking-wide"
+              >PH Commute Advisory</span
+            >
+          </div>
+          <p class="muted">
+            Practical routes, payment methods (Cash/GCash/Beep), and realistic fare expectations for this trip.
+          </p>
+          <!-- Transit Cards Grid -->
+          <div
+            id="transitCardsGrid"
+            class="grid grid-cols-1 md:grid-cols-2 gap-3"
+          ></div>
+          <!-- Transit Quick-Link Action Bar -->
+          <div class="pt-2 border-t border-slate-800 space-y-2">
+            <span
+              class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider"
+              >Commute & Booking Quick-Launch</span
+            >
+            <div id="transitLinksRow" class="flex flex-wrap gap-2"></div>
+          </div>
+        </section>
+
+        <!-- Local Flavors & Dining Guide Section -->
+        <section id="diningSection" class="panel dining-panel space-y-4">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="dining-icon-chip" aria-hidden="true">🍲</span>
+              <h2>Local Flavors & Dining Guide</h2>
+            </div>
+            <span
+              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase tracking-wide"
+              >Authentic PH Gastronomy</span
+            >
+          </div>
+          <p class="muted">
+            Curated regional culinary spots, humble carenderias, iconic street food, plant-based gems, and dishes rich in coconut milk (Ginataan).
+          </p>
+          <!-- Dining Cards Grid -->
+          <div
+            id="diningCardsGrid"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+          ></div>
+        </section>
+
+        <section id="accommodationSection" class="panel stay-panel space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="stay-icon-chip" aria-hidden="true">🏨</span>
+              <h2>Curated Stays & Accommodation Guide</h2>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                data-dialog="shortlistModal"
+                aria-label="Open pinned stays shortlist"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <span aria-hidden="true">📌</span>
+                <span>View Shortlist</span>
+              </button>
+              <span
+                id="activeStayBadge"
+                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                >All Accommodations</span
+              >
+            </div>
+          </div>
+          <p class="muted">
+            AI-curated hotels, vacation villas, beach resorts, and backpacker hostels with direct booking search and 1-click Shortlist pinning.
+          </p>
+          <div
+            id="stayFilterBar"
+            role="tablist"
+            aria-label="Accommodation type filter"
+            class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800"
+          >
+            <button
+              id="stayFilterAll"
+              type="button"
+              role="tab"
+              data-stay-filter="all"
+              aria-selected="true"
+              class="stay-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 transition-all text-center"
+            >
+              All
+            </button>
+            <button
+              id="stayFilterHotel"
+              type="button"
+              role="tab"
+              data-stay-filter="hotel"
+              aria-selected="false"
+              class="stay-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all text-center"
+            >
+              Hotels Only
+            </button>
+            <button
+              id="stayFilterRental"
+              type="button"
+              role="tab"
+              data-stay-filter="rental"
+              aria-selected="false"
+              class="stay-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all text-center"
+            >
+              Airbnb / Rentals
+            </button>
+            <button
+              id="stayFilterResort"
+              type="button"
+              role="tab"
+              data-stay-filter="resort_hostel"
+              aria-selected="false"
+              class="stay-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition-all text-center"
+            >
+              Resorts / Hostels
+            </button>
+          </div>
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center justify-between">
+              <span class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider"
+                >AI Recommended Properties</span
+              >
+              <span id="stayCountLabel" class="text-[11px] text-slate-500 font-medium"></span>
+            </div>
+            <div
+              id="aiStaysGrid"
+              class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+            ></div>
+          </div>
+          <div id="stayFilterSummary" class="text-xs text-slate-400 pt-1"></div>
+        </section>
+
         <section id="budgetSection" class="panel">
           <h2>Trip estimate</h2>
           <p class="muted">
@@ -680,6 +843,87 @@
         stay in your personal history. Keep backups private.
       </p>
       <button data-close class="secondary">Close</button>
+    </dialog>
+    <dialog id="shortlistModal" aria-labelledby="shortlistTitle" class="shortlist-drawer">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="text-base" aria-hidden="true">📌</span>
+          <h2 id="shortlistTitle">Pinned Stays Shortlist</h2>
+        </div>
+        <button data-close aria-label="Close shortlist" class="secondary text-xs">✕</button>
+      </div>
+      <p class="muted">
+        Collaborative shortlist synced with Google Sheets. Pin accommodations or add specific hotels to compare with your group.
+      </p>
+
+      <!-- Add Stay Toggle Button -->
+      <button
+        type="button"
+        id="toggleAddStayBtn"
+        class="w-full py-2 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-all mt-3 mb-2"
+      >
+        <span aria-hidden="true">＋</span> Add Specific Stay
+      </button>
+
+      <!-- Add Stay Form (Collapsible) -->
+      <form
+        id="addStayForm"
+        class="hidden p-3.5 bg-slate-950 border border-slate-800 rounded-xl space-y-2.5 mb-3"
+      >
+        <div class="flex items-center justify-between pb-1 border-b border-slate-800/80">
+          <span class="text-[11px] font-bold text-slate-300">Add Property Link</span>
+          <button
+            type="button"
+            id="smartPasteStayBtn"
+            aria-label="Smart paste stay link from clipboard"
+            class="py-1 px-2.5 rounded-lg bg-lime-500/15 hover:bg-lime-500/25 text-lime-300 border border-lime-500/35 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <span aria-hidden="true">📋</span> Smart Paste
+          </button>
+        </div>
+        <div class="space-y-1">
+          <label for="manualStayLink" class="text-[11px] font-semibold text-slate-300">Booking Link (URL)</label>
+          <input
+            type="url"
+            id="manualStayLink"
+            placeholder="https://airbnb.com/rooms/... or Agoda link"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div class="space-y-1">
+            <label for="manualStayName" class="text-[11px] font-semibold text-slate-300">Hotel / Property Name</label>
+            <input
+              type="text"
+              id="manualStayName"
+              required
+              maxlength="200"
+              placeholder="e.g. Shangri-La Boracay, Airbnb Villa"
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+          <div class="space-y-1">
+            <label for="manualStayPrice" class="text-[11px] font-semibold text-slate-300">Estimated Price</label>
+            <input
+              type="text"
+              id="manualStayPrice"
+              maxlength="80"
+              placeholder="e.g. ₱4,500 / night"
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+        </div>
+        <div class="flex gap-2 justify-end pt-1">
+          <button type="button" id="cancelAddStayBtn" class="secondary text-xs py-1.5 px-3">Cancel</button>
+          <button type="submit" id="saveManualStayBtn" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs py-1.5 px-4 rounded-lg transition-colors">Save to Shortlist</button>
+        </div>
+      </form>
+
+      <div id="shortlistItemsList" class="space-y-2.5 my-2 min-h-[100px]"></div>
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+        <span id="shortlistSyncStatus" class="text-[10px] text-slate-500">Google Sheets Sync Active</span>
+        <button data-close class="secondary">Close</button>
+      </div>
     </dialog>
     <dialog id="checklistModal" aria-labelledby="checklistTitle">
       <h2 id="checklistTitle">Before you head out</h2>

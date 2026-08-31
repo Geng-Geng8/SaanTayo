@@ -5,13 +5,14 @@ Mobile-first Philippines travel intelligence: practical itineraries, destination
 ## Architecture
 
 ```text
-GitHub Pages (static build + device-local plans + service worker)
+GitHub Pages (static build + device-local cache + service worker)
     → Cloudflare Worker /api/travel → Gemini 3.7 Flash Interactions + Search/Maps
     → /api/budget → optional tool-free structured cost extraction
     → /api/fx → Frankfurter daily PHP/CAD reference rate
+    → Google Apps Script /exec → Google Sheets (Trips & SavedItems worksheets)
 ```
 
-Google holds conversation state via `previous_interaction_id`. The browser holds a signed, expiring capability token and local recovery context. The key never reaches the frontend. The Worker uses official REST, with no Gemini SDK dependency. See [API decisions](docs/GEMINI.md), [audit](docs/AUDIT.md), [test coverage](docs/TESTING.md).
+Google Sheets is the **authoritative source of truth** for collaborative shared trips and universal saved items (stays, food spots, transit options), with `localStorage` providing fast-boot and offline fallback. See [System Architecture](docs/architecture.md), [Universal Saved Items V1](docs/saved-items-v1.md), [API Decisions](docs/GEMINI.md), [Security Audit](docs/AUDIT.md), and [Test Coverage](docs/TESTING.md).
 
 ## Local development
 

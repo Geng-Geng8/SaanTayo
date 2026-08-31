@@ -39,7 +39,7 @@ execFileSync(
   ],
   { stdio: "inherit" },
 );
-const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'${apiBase ? " " + apiBase : ""}; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'`;
+const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com${apiBase ? " " + apiBase : ""}; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'`;
 const html = (await readFile("index.html", "utf8")).replace("__CSP__", csp);
 await writeFile("dist/index.html", html);
 await copyFile("manifest.json", "dist/manifest.json");
