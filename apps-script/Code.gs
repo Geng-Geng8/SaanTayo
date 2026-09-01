@@ -122,6 +122,10 @@ function doGet(e) {
       return handleListTrips_();
     }
 
+    if (action === "get_all_items") {
+      return handleGetAllItems_();
+    }
+
     const tripId = normalizeId_(params.tripId);
 
     if (!tripId) {
@@ -444,8 +448,8 @@ function handleSaveItem_(payload) {
   }
 
   // IMPORTANT:
-  // Return authoritative state from Sheets after mutation.
-  const items = fetchItemsForTrip_(tripId);
+  // Return authoritative global state from Sheets after mutation.
+  const items = fetchAllSavedItems_();
 
   return jsonResponse_({
     status: "success",
@@ -495,7 +499,7 @@ function handleDeleteItem_(payload) {
     }
   }
 
-  const items = fetchItemsForTrip_(tripId);
+  const items = fetchAllSavedItems_();
 
   if (!deleted) {
     return jsonResponse_({
@@ -522,6 +526,20 @@ function handleDeleteItem_(payload) {
 }
 
 
+function handleGetAllItems_() {
+  const items = fetchAllSavedItems_();
+
+  return jsonResponse_({
+    status: "success",
+    items: items,
+
+    // Useful for older frontend code.
+    data: items,
+    stays: items
+  });
+}
+
+
 function handleGetItems_(tripId) {
   const items = fetchItemsForTrip_(tripId);
 
@@ -537,7 +555,52 @@ function handleGetItems_(tripId) {
 }
 
 
-function fetchItemsForTrip_(tripId) {
+function mapRowToSavedItem_(row) {
+  const itemId = String(row[0] || "");
+  const itemType = String(row[3] || "stay")
+    .trim()
+    .toLowerCase();
+
+  const detailsJSON = String(row[11] || "{}");
+
+  return {
+    itemId: itemId,
+
+    // Temporary old-client alias
+    stayId: itemId,
+
+    tripId: String(row[1] || ""),
+
+    createdAt: normalizeSheetDate_(row[2]),
+
+    itemType: itemType,
+
+    name: String(row[4] || "Saved Item"),
+
+    // Temporary old-client alias
+    hotelName: String(row[4] || "Saved Item"),
+
+    location: String(row[5] || ""),
+
+    category: String(row[6] || ""),
+
+    price: String(row[7] || ""),
+
+    link: String(row[8] || ""),
+
+    savedBy: String(row[9] || ""),
+
+    status: String(row[10] || "saved"),
+
+    detailsJSON: detailsJSON,
+
+    // Parsed convenience representation.
+    details: parseDetailsJson_(detailsJSON)
+  };
+}
+
+
+function fetchAllSavedItems_() {
   const sheet = getSavedItemsSheet_();
   const data = sheet.getDataRange().getValues();
 
@@ -549,55 +612,22 @@ function fetchItemsForTrip_(tripId) {
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
+    const itemId = String(row[0] || "").trim();
+    if (!itemId) continue;
 
-    if (String(row[1] || "").trim() !== tripId) {
-      continue;
-    }
-
-    const itemId = String(row[0] || "");
-    const itemType = String(row[3] || "stay")
-      .trim()
-      .toLowerCase();
-
-    const detailsJSON = String(row[11] || "{}");
-
-    items.push({
-      itemId: itemId,
-
-      // Temporary old-client alias
-      stayId: itemId,
-
-      tripId: String(row[1] || ""),
-
-      createdAt: normalizeSheetDate_(row[2]),
-
-      itemType: itemType,
-
-      name: String(row[4] || "Saved Item"),
-
-      // Temporary old-client alias
-      hotelName: String(row[4] || "Saved Item"),
-
-      location: String(row[5] || ""),
-
-      category: String(row[6] || ""),
-
-      price: String(row[7] || ""),
-
-      link: String(row[8] || ""),
-
-      savedBy: String(row[9] || ""),
-
-      status: String(row[10] || "saved"),
-
-      detailsJSON: detailsJSON,
-
-      // Parsed convenience representation.
-      details: parseDetailsJson_(detailsJSON)
-    });
+    items.push(mapRowToSavedItem_(row));
   }
 
   return items;
+}
+
+
+function fetchItemsForTrip_(tripId) {
+  const allItems = fetchAllSavedItems_();
+
+  return allItems.filter(function(item) {
+    return item.tripId === tripId;
+  });
 }
 
 

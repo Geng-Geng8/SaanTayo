@@ -125,9 +125,13 @@ export function renderShortlistItem(item, { onDelete } = {}) {
 
   const savedByName = String(item.savedBy || "Glen");
   const isAnne = savedByName.toLowerCase() === "anne";
+  const origin = (item.tripDestination || item.destination || "").trim();
+  const originTagText = origin
+    ? `${origin} · Saved by ${savedByName}`
+    : `Saved by ${savedByName}`;
   const userTag = el(
     "span",
-    `Saved by ${savedByName}`,
+    originTagText,
     `shortlist-user-tag ${isAnne ? "shortlist-user-anne" : "shortlist-user-glen"}`,
   );
   metaRow.append(userTag);
@@ -159,9 +163,10 @@ export function renderShortlistItem(item, { onDelete } = {}) {
   const delBtn = el("button", "🗑️", "shortlist-delete-btn");
   delBtn.type = "button";
   const itemId = item.itemId || item.stayId || item.id;
+  const tripId = item.tripId || item.TripID || "";
   delBtn.setAttribute("aria-label", `Remove ${displayName} from shortlist`);
   if (onDelete) {
-    delBtn.addEventListener("click", () => onDelete(itemId));
+    delBtn.addEventListener("click", () => onDelete(itemId, tripId));
   }
 
   row.append(content, delBtn);

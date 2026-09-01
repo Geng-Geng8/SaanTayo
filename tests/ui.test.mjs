@@ -1407,3 +1407,348 @@ test("Compatibility regression — current.savedItems contains all types while c
 
   app.dom.window.close();
 });
+
+test("Global Shared Shortlist — Multi-trip items, partner filtering (All / Glen / Anne), and global badge count", async () => {
+  const remoteItems = [
+    {
+      itemId: "stay-glen-1",
+      tripId: "trip-cebu",
+      itemType: "stay",
+      name: "Radisson Blu Cebu",
+      location: "Cebu City",
+      category: "Hotel",
+      price: "₱5,500/night",
+      savedBy: "Glen",
+      detailsJSON: JSON.stringify({ description: "Near SM City" }),
+    },
+    {
+      itemId: "food-anne-1",
+      tripId: "trip-siargao",
+      itemType: "food",
+      name: "Shaka Cafe",
+      location: "General Luna",
+      category: "Restaurant",
+      price: "₱350",
+      savedBy: "Anne",
+      detailsJSON: JSON.stringify({ mustTryDish: "Bom Dia Bowl" }),
+    },
+    {
+      itemId: "activity-glen-2",
+      tripId: "trip-siargao",
+      itemType: "activity",
+      name: "Cloud 9 Surfing",
+      location: "Siargao",
+      category: "Activity",
+      price: "₱1,000",
+      savedBy: "Glen",
+      detailsJSON: JSON.stringify({ bestFor: "Intermediate Surfers" }),
+    },
+  ];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+    },
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "get_all_items") {
+        return Response.json({ status: "success", items: remoteItems });
+      }
+      return Response.json({ status: "success", items: remoteItems });
+    },
+  });
+
+  await tick();
+  await tick();
+
+  // Shortlist badge shows 3 (global count across all trips)
+  assert.equal(app.$("shortlistBadge").textContent, "3");
+
+  // Open shortlist drawer
+  app.$("openShortlistBtn").click();
+  await tick();
+
+  // By default, 'all' filter is active
+  let displayed = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 3);
+
+  // Click existing 'Glen' partner filter button
+  const glenBtn = app
+    .$("shortlistPartnerFilter")
+    .querySelector('[data-partner-filter="Glen"]');
+  assert.ok(glenBtn);
+  glenBtn.click();
+  await tick();
+
+  displayed = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 2);
+  const glenTexts = [...displayed].map((d) => d.textContent);
+  assert.ok(glenTexts.some((t) => t.includes("Radisson Blu Cebu")));
+  assert.ok(glenTexts.some((t) => t.includes("Cloud 9 Surfing")));
+  assert.ok(!glenTexts.some((t) => t.includes("Shaka Cafe")));
+
+  // Click existing 'Anne' partner filter button
+  const anneBtn = app
+    .$("shortlistPartnerFilter")
+    .querySelector('[data-partner-filter="Anne"]');
+  assert.ok(anneBtn);
+  anneBtn.click();
+  await tick();
+
+  displayed = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 1);
+  assert.ok(displayed[0].textContent.includes("Shaka Cafe"));
+  assert.ok(displayed[0].textContent.includes("Saved by Anne"));
+
+  // Click existing 'All' partner filter button again
+  const allBtn = app
+    .$("shortlistPartnerFilter")
+    .querySelector('[data-partner-filter="all"]');
+  assert.ok(allBtn);
+  allBtn.click();
+  await tick();
+
+  displayed = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 3);
+
+  app.dom.window.close();
+});
+
+test("Global Shared Shortlist — Cross-trip deletion sends target item's own TripID", async () => {
+  let deletedItemPayload = null;
+  let itemsInStore = [
+    {
+      itemId: "item-trip-a",
+      tripId: "trip-a",
+      itemType: "stay",
+      name: "Cebu Waterfront",
+      location: "Cebu",
+      savedBy: "Glen",
+    },
+    {
+      itemId: "item-trip-b",
+      tripId: "trip-b",
+      itemType: "food",
+      name: "Siargao Spot",
+      location: "Siargao",
+      savedBy: "Anne",
+    },
+  ];
+
+  const app = await setup({
+    url: "https://saantayo.app/?trip=trip-a",
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+    },
+    sheetsHandler: (reqUrl, options, { action, bodyObj }) => {
+      if (action === "get_all_items") {
+        return Response.json({ status: "success", items: itemsInStore });
+      }
+      if (action === "get_trip") {
+        return Response.json({
+          status: "success",
+          destination: "Cebu City",
+          tripDataJSON: JSON.stringify({
+            id: "trip-a",
+            destination: "Cebu City",
+            result: normalizeInteraction(interaction()),
+            trip: {
+              mode: "itinerary",
+              destination: "Cebu City",
+              days: 3,
+              people: 2,
+              vibes: ["Beach", "Foodie"],
+              stayType: "all",
+            },
+          }),
+        });
+      }
+      if (action === "delete_item") {
+        deletedItemPayload = bodyObj;
+        itemsInStore = itemsInStore.filter((i) => i.itemId !== bodyObj.itemId);
+        return Response.json({ status: "success", items: itemsInStore });
+      }
+      return Response.json({ status: "success", items: itemsInStore });
+    },
+  });
+
+  await tick();
+  await tick();
+  await tick();
+
+  // Active trip is trip-a
+  app.$("openShortlistBtn").click();
+  await tick();
+
+  const displayed = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 2);
+
+  // Delete Anne's item (which belongs to trip-b)
+  const delBtns = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-delete-btn");
+  assert.equal(delBtns.length, 2);
+  delBtns[1].click(); // Deletes item-trip-b
+  await tick();
+  await tick();
+
+  assert.ok(deletedItemPayload);
+  assert.equal(deletedItemPayload.itemId, "item-trip-b");
+  assert.equal(deletedItemPayload.tripId, "trip-b"); // MUST be trip-b, NOT trip-a!
+
+  app.dom.window.close();
+});
+
+test("Global Shared Shortlist — Active partner identity stamps savedBy on new saves", async () => {
+  let savedPayload = null;
+  const itemsInStore = [];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Anne",
+    },
+    sheetsHandler: (reqUrl, options, { action, bodyObj }) => {
+      if (action === "get_all_items") {
+        return Response.json({ status: "success", items: itemsInStore });
+      }
+      if (action === "save_item") {
+        savedPayload = bodyObj;
+        itemsInStore.unshift(bodyObj);
+        return Response.json({ status: "success", items: itemsInStore });
+      }
+      return Response.json({ status: "success", items: itemsInStore });
+    },
+  });
+
+  await tick();
+  await app.generate();
+  await tick();
+
+  // Pin a stay while identity is Anne
+  const stayPinBtns = (
+    app.$("aiStaysGrid") || app.$("providerLinksGrid")
+  ).querySelectorAll(".pin-btn");
+  assert.ok(stayPinBtns.length > 0);
+  stayPinBtns[0].click();
+  await tick();
+  await tick();
+
+  assert.ok(savedPayload);
+  assert.equal(savedPayload.savedBy, "Anne");
+
+  app.dom.window.close();
+});
+
+test("Global Shared Shortlist — Offline fallback preserves cached global shortlist without overwriting", async () => {
+  const cachedItems = [
+    {
+      itemId: "cached-item-1",
+      tripId: "trip-coron",
+      itemType: "stay",
+      name: "Coron Underground Resort",
+      location: "Coron",
+      savedBy: "Glen",
+    },
+    {
+      itemId: "cached-item-2",
+      tripId: "trip-el-nido",
+      itemType: "food",
+      name: "Artcafe El Nido",
+      location: "El Nido",
+      savedBy: "Anne",
+    },
+  ];
+
+  const app = await setup({
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+      saantayo_global_shortlist: JSON.stringify(cachedItems),
+    },
+    sheetsHandler: () => {
+      throw new Error("Network offline / 500 Sheets Outage");
+    },
+  });
+
+  await tick();
+
+  // Trigger shortlist drawer open
+  app.$("openShortlistBtn").click();
+  await tick();
+
+  const displayed = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-item");
+  assert.equal(displayed.length, 2);
+  app.dom.window.close();
+});
+
+test("Global Shared Shortlist — Global delete fails closed when TripID is missing", async () => {
+  let deleteCalled = false;
+  const itemsInStore = [
+    {
+      itemId: "orphan-item-1",
+      tripId: "", // Deliberately missing tripId
+      itemType: "stay",
+      name: "Orphaned Mystery Stay",
+      location: "Unknown",
+      savedBy: "Glen",
+    },
+  ];
+
+  const app = await setup({
+    url: "https://saantayo.app/?trip=active-workspace-trip-id",
+    initial: {
+      saantayo_partner_identity_v1: "Glen",
+    },
+    sheetsHandler: (reqUrl, options, { action }) => {
+      if (action === "get_all_items") {
+        return Response.json({ status: "success", items: itemsInStore });
+      }
+      if (action === "delete_item") {
+        deleteCalled = true;
+        return Response.json({ status: "success", items: [] });
+      }
+      return Response.json({ status: "success", items: itemsInStore });
+    },
+  });
+
+  await tick();
+  await tick();
+
+  app.$("openShortlistBtn").click();
+  await tick();
+
+  const displayedBefore = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-item");
+  assert.equal(displayedBefore.length, 1);
+
+  // Attempt to delete the orphan item
+  const delBtn = app
+    .$("shortlistItemsList")
+    .querySelector(".shortlist-delete-btn");
+  assert.ok(delBtn);
+  delBtn.click();
+  await tick();
+  await tick();
+
+  // Fail-closed verification:
+  // 1. Google Sheets delete_item must NOT have been called
+  assert.equal(deleteCalled, false);
+
+  // 2. Shortlist must remain unchanged (item not deleted)
+  const displayedAfter = app
+    .$("shortlistItemsList")
+    .querySelectorAll(".shortlist-item");
+  assert.equal(displayedAfter.length, 1);
+
+  // 3. Error toast informing user of missing trip reference must be shown
+  assert.ok(
+    app.$("toastMessage").textContent.includes("missing trip reference"),
+  );
+
+  app.dom.window.close();
+});

@@ -952,3 +952,23 @@ test("mixed items separation — savedItems retains all types while stays retain
   assert.equal(staysOnly[0].itemType, "stay");
   assert.equal(staysOnly[0].name, "Hotel");
 });
+
+test("canonicalizeSavedItem and normalizeSavedItems preserve partner attribution and cross-trip IDs", () => {
+  const itemTripA = canonicalizeSavedItem(
+    { name: "Cebu Hotel", tripId: "trip-a", savedBy: "Glen", itemType: "stay" },
+    "trip-a",
+    "Glen",
+  );
+  const itemTripB = canonicalizeSavedItem(
+    { name: "Boracay Cafe", tripId: "trip-b", savedBy: "Anne", itemType: "food" },
+    "trip-b",
+    "Anne",
+  );
+
+  const globalList = normalizeSavedItems([itemTripA, itemTripB]);
+  assert.equal(globalList.length, 2);
+  assert.equal(globalList[0].tripId, "trip-a");
+  assert.equal(globalList[0].savedBy, "Glen");
+  assert.equal(globalList[1].tripId, "trip-b");
+  assert.equal(globalList[1].savedBy, "Anne");
+});
