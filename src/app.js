@@ -62,7 +62,8 @@ let mode = "itinerary",
   inFlightRefreshes = new Set(),
   lastAutoRefresh = 0,
   current = null,
-  savedItems = [],
+  globalSavedItems = [],
+  savedItems = globalSavedItems,
   pinnedStays = savedItems,
   controller = null,
   fx = null,
@@ -615,23 +616,87 @@ async function refreshFx() {
   } catch {}
   renderBudget();
 }
+function readGlobalShortlistCache() {
+  try {
+    const raw = localStorage.getItem("saantayo_global_shortlist");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return normalizeSavedItems(parsed);
+    }
+  } catch {}
+  return [];
+}
+
+function updateShortlistBadge(isLoading = false) {
+  const badge = $("shortlistBadge");
+  if (badge) {
+    badge.textContent =
+      isLoading && !globalSavedItems.length ? "…" : String(globalSavedItems.length);
+  }
+}
+
+function syncGlobalSavedItems(items = []) {
+  const tripId = current?.id || "";
+  const partner = getPartnerIdentity(localStorage) || "Glen";
+  globalSavedItems = normalizeSavedItems(items || [], tripId, partner);
+  try {
+    localStorage.setItem(
+      "saantayo_global_shortlist",
+      JSON.stringify(globalSavedItems),
+    );
+  } catch {}
+  savedItems = globalSavedItems;
+  pinnedStays = savedItems;
+  if (current) {
+    current.savedItems = globalSavedItems.filter((s) => !s.tripId || s.tripId === current.id);
+    current.stays = current.savedItems.filter((s) => s.itemType === "stay");
+  }
+  badge();
+  updateShortlistBadge();
+}
+
 function syncSavedItemsState(items = []) {
   const tripId = current?.id || "";
   const partner = getPartnerIdentity(localStorage) || "Glen";
-  savedItems = normalizeSavedItems(items || [], tripId, partner);
+  const normalized = normalizeSavedItems(items || [], tripId, partner);
+
+  if (normalized.length && normalized.some((i) => i.tripId && tripId && i.tripId !== tripId)) {
+    globalSavedItems = normalized;
+  } else {
+    const otherTripItems = globalSavedItems.filter(
+      (i) => i.tripId && tripId && i.tripId !== tripId,
+    );
+    globalSavedItems = [...normalized, ...otherTripItems];
+  }
+
+  try {
+    localStorage.setItem(
+      "saantayo_global_shortlist",
+      JSON.stringify(globalSavedItems),
+    );
+  } catch {}
+
+  savedItems = globalSavedItems;
   pinnedStays = savedItems;
   if (current) {
-    current.savedItems = savedItems;
-    current.stays = savedItems.filter((s) => s.itemType === "stay");
+    current.savedItems = globalSavedItems.filter(
+      (s) => !s.tripId || s.tripId === current.id,
+    );
+    current.stays = current.savedItems.filter((s) => s.itemType === "stay");
   }
   badge();
+  updateShortlistBadge();
 }
 
 function persistCurrent() {
   if (!current) return;
   current.notes = $("travelNotes").value;
-  current.savedItems = [...savedItems];
-  current.stays = savedItems.filter((s) => s.itemType === "stay");
+  if (current.id) {
+    current.savedItems = globalSavedItems.filter(
+      (s) => !s.tripId || s.tripId === current.id,
+    );
+    current.stays = current.savedItems.filter((s) => s.itemType === "stay");
+  }
   current.updatedAt = new Date().toISOString();
   try {
     saveTrip(localStorage, current);
@@ -694,11 +759,16 @@ async function saveItem(rawItem) {
     partner,
   );
 
-  // Optimistic local update
-  if (!savedItems.some((s) => s.itemId === canonical.itemId)) {
-    savedItems.unshift(canonical);
+  // Optimistic local update in global collection
+  const existingIdx = globalSavedItems.findIndex(
+    (s) => s.itemId === canonical.itemId || s.stayId === canonical.itemId,
+  );
+  if (existingIdx >= 0) {
+    globalSavedItems[existingIdx] = canonical;
+  } else {
+    globalSavedItems.unshift(canonical);
   }
-  syncSavedItemsState(savedItems);
+  syncSavedItemsState(globalSavedItems);
   try {
     saveTrip(localStorage, current);
   } catch {}
@@ -737,7 +807,7 @@ async function saveItem(rawItem) {
           : null;
 
     if (remoteList !== null) {
-      syncSavedItemsState(remoteList);
+      syncGlobalSavedItems(remoteList);
       try {
         saveTrip(localStorage, current);
       } catch {}
@@ -747,7 +817,7 @@ async function saveItem(rawItem) {
       renderActivities();
       renderTransit();
     } else {
-      await loadSavedItemsFromSheets(tripId);
+      await loadGlobalSavedItemsFromSheets({ silent: true });
     }
   } catch (err) {
     console.warn("Failed to save item to Google Sheets:", err);
@@ -755,17 +825,23 @@ async function saveItem(rawItem) {
   }
 }
 
-async function deleteItem(itemId) {
-  if (!current) return;
-  const tripId = current.id;
+async function deleteItem(itemId, itemTripId) {
+  const found = globalSavedItems.find(
+    (s) => s.itemId === itemId || s.stayId === itemId,
+  );
+  const tripId = itemTripId || found?.tripId || "";
+  if (!tripId) {
+    toast("Cannot delete item: missing trip reference.");
+    return;
+  }
 
   // Optimistic local update
-  savedItems = savedItems.filter(
+  globalSavedItems = globalSavedItems.filter(
     (s) => s.itemId !== itemId && s.stayId !== itemId,
   );
-  syncSavedItemsState(savedItems);
+  syncSavedItemsState(globalSavedItems);
   try {
-    saveTrip(localStorage, current);
+    if (current) saveTrip(localStorage, current);
   } catch {}
   renderShortlist();
   renderAccommodations();
@@ -790,9 +866,9 @@ async function deleteItem(itemId) {
           : null;
 
     if (remoteList !== null) {
-      syncSavedItemsState(remoteList);
+      syncGlobalSavedItems(remoteList);
       try {
-        saveTrip(localStorage, current);
+        if (current) saveTrip(localStorage, current);
       } catch {}
       renderShortlist();
       renderAccommodations();
@@ -800,7 +876,7 @@ async function deleteItem(itemId) {
       renderActivities();
       renderTransit();
     } else {
-      await loadSavedItemsFromSheets(tripId);
+      await loadGlobalSavedItemsFromSheets({ silent: true });
     }
   } catch (err) {
     console.warn("Failed to delete item from Google Sheets:", err);
@@ -900,17 +976,30 @@ async function pinTransit(leg) {
 const unpinStay = deleteItem;
 
 function renderShortlist({ isLoading = false } = {}) {
-  const badge = $("shortlistBadge");
-  if (badge) {
-    badge.textContent =
-      isLoading && !savedItems.length ? "…" : String(savedItems.length);
+  if (!globalSavedItems.length) {
+    const cached = readGlobalShortlistCache();
+    if (cached.length) {
+      syncGlobalSavedItems(cached);
+    }
   }
+
+  updateShortlistBadge(isLoading);
+
+  document.querySelectorAll("[data-partner-filter]").forEach((b) => {
+    const isSelected =
+      (b.dataset.partnerFilter || "").toLowerCase() ===
+      activePartnerFilter.toLowerCase();
+    b.classList.toggle("bg-cyan-500", isSelected);
+    b.classList.toggle("text-slate-950", isSelected);
+    b.classList.toggle("bg-slate-800", !isSelected);
+    b.classList.toggle("text-slate-400", !isSelected);
+  });
 
   const container = $("shortlistItemsList");
   if (!container) return;
   container.replaceChildren();
 
-  if (isLoading && !savedItems.length) {
+  if (isLoading && !globalSavedItems.length) {
     container.append(
       el(
         "p",
@@ -921,7 +1010,7 @@ function renderShortlist({ isLoading = false } = {}) {
     return;
   }
 
-  if (!savedItems.length) {
+  if (!globalSavedItems.length) {
     container.append(
       el(
         "p",
@@ -934,8 +1023,8 @@ function renderShortlist({ isLoading = false } = {}) {
 
   const visibleItems =
     activePartnerFilter === "all"
-      ? savedItems
-      : savedItems.filter(
+      ? globalSavedItems
+      : globalSavedItems.filter(
           (item) =>
             (item.savedBy || "Glen").toLowerCase() ===
             activePartnerFilter.toLowerCase(),
@@ -957,8 +1046,89 @@ function renderShortlist({ isLoading = false } = {}) {
   }
 }
 
+async function loadGlobalSavedItemsFromSheets({ silent = false } = {}) {
+  try {
+    const statusEl = $("shortlistSyncStatus");
+    if (statusEl && !silent) {
+      statusEl.textContent = "Refreshing shared items…";
+    }
+
+    let res = null;
+    try {
+      res = await fetchSheetsApi(
+        { action: "get_all_items" },
+        { method: "GET" },
+      );
+    } catch {}
+
+    if (
+      !res ||
+      (!Array.isArray(res) &&
+        !Array.isArray(res?.items) &&
+        !Array.isArray(res?.data) &&
+        !Array.isArray(res?.stays))
+    ) {
+      if (current?.id) {
+        try {
+          res = await fetchSheetsApi(
+            { action: "get_items", tripId: current.id },
+            { method: "GET" },
+          );
+        } catch {}
+      }
+    }
+
+    const rawList = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.stays)
+          ? res.stays
+          : Array.isArray(res?.data)
+            ? res.data
+            : null;
+
+    if (rawList !== null) {
+      syncGlobalSavedItems(rawList);
+      if (current) {
+        try {
+          saveTrip(localStorage, current);
+        } catch {}
+      }
+      renderShortlist();
+      renderAccommodations();
+      renderDining();
+      renderActivities();
+      renderTransit();
+      if (statusEl) statusEl.textContent = "Synced just now";
+      return globalSavedItems;
+    }
+  } catch (err) {
+    console.warn("Could not load global saved items from Sheets:", err);
+    if (!globalSavedItems.length) {
+      const cached = readGlobalShortlistCache();
+      if (cached.length) {
+        syncGlobalSavedItems(cached);
+        renderShortlist();
+        renderAccommodations();
+        renderDining();
+        renderActivities();
+        renderTransit();
+      }
+    }
+    const statusEl = $("shortlistSyncStatus");
+    if (statusEl) {
+      statusEl.textContent = "Offline · showing cached items";
+    }
+  }
+  return null;
+}
+
 async function loadSavedItemsFromSheets(tripId) {
   if (!tripId) return null;
+  const globalItems = await loadGlobalSavedItemsFromSheets({ silent: true });
+  if (globalItems !== null) return globalItems;
+
   if (inFlightRefreshes.has(tripId)) return savedItems;
   inFlightRefreshes.add(tripId);
   try {
@@ -982,10 +1152,12 @@ async function loadSavedItemsFromSheets(tripId) {
         !Array.isArray(res?.data) &&
         !Array.isArray(res?.stays))
     ) {
-      res = await fetchSheetsApi(
-        { action: "get_stays", tripId },
-        { method: "GET" },
-      );
+      try {
+        res = await fetchSheetsApi(
+          { action: "get_stays", tripId },
+          { method: "GET" },
+        );
+      } catch {}
     }
 
     const rawList = Array.isArray(res)
@@ -999,7 +1171,6 @@ async function loadSavedItemsFromSheets(tripId) {
             : null;
 
     if (rawList !== null) {
-      // Race protection: only update in-memory state & UI if current trip matches (or unset)
       if (!current || current.id === tripId) {
         syncSavedItemsState(rawList);
         if (current) {
@@ -1015,7 +1186,6 @@ async function loadSavedItemsFromSheets(tripId) {
         if (statusEl) statusEl.textContent = "Synced just now";
         return savedItems;
       } else {
-        // User switched trips: persist background response to local storage cache for tripId without polluting active UI
         try {
           const allLocal = readTrips(localStorage);
           const targetTrip = allLocal.find((t) => t.id === tripId);
@@ -1029,6 +1199,17 @@ async function loadSavedItemsFromSheets(tripId) {
     }
   } catch (err) {
     console.warn("Could not load saved items from Sheets:", err);
+    if (!globalSavedItems.length) {
+      const cached = readGlobalShortlistCache();
+      if (cached.length) {
+        syncGlobalSavedItems(cached);
+        renderShortlist();
+        renderAccommodations();
+        renderDining();
+        renderActivities();
+        renderTransit();
+      }
+    }
     const statusEl = $("shortlistSyncStatus");
     if (statusEl && current?.id === tripId) {
       statusEl.textContent = "Offline · showing cached items";
@@ -1686,11 +1867,16 @@ if (cachedShared !== null) {
   sharedTrips = cachedShared;
   hasSharedSnapshot = true;
 }
+const cachedGlobal = readGlobalShortlistCache();
+if (cachedGlobal.length) {
+  syncGlobalSavedItems(cachedGlobal);
+}
 updatePartnerIdentityUI();
 badge();
 renderShortlist();
 renderSaved();
 loadTripFromUrl();
+loadGlobalSavedItemsFromSheets({ silent: true });
 connection();
 
 // First-use chooser: if no partner identity has been set, open chooser modal automatically
@@ -1720,8 +1906,13 @@ document.querySelectorAll('[data-dialog="savedTripsModal"]').forEach((btn) => {
 
 document.querySelectorAll('[data-dialog="shortlistModal"]').forEach((btn) => {
   btn.addEventListener("click", () => {
+    loadGlobalSavedItemsFromSheets({ silent: true });
     if (current?.id) triggerAutoRefresh("manual");
   });
+});
+
+$("openShortlistBtn")?.addEventListener("click", () => {
+  loadGlobalSavedItemsFromSheets({ silent: true });
 });
 
 document.querySelectorAll("[data-partner-filter]").forEach((btn) => {
