@@ -736,3 +736,5 @@ export function renderAnswer(result, legacyContent = "") {
     container.append(el("p", warning, "notice warning"));
   return container;
 }
+
+export { renderTransitRoute } from "./transit-render.js";
