@@ -11,21 +11,21 @@ export const JOURNEY_ADVISOR_SCHEMA = {
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     assumption: { type: "string" },
     summary: { type: "string" },
-    recommendedMode: { type: ["string", "null"], enum: ["grab", "train", "local", null] },
+    recommendedMode: { type: ["string", "null"], enum: ["walk", "grab", "train", "local", null] },
     options: {
       type: "array",
-      maxItems: 3,
+      maxItems: 4,
       items: {
         type: "object",
         properties: {
-          mode: { type: "string", enum: ["grab", "train", "local"] },
+          mode: { type: "string", enum: ["walk", "grab", "train", "local"] },
           label: { type: "string" },
           confidence: { type: "string", enum: ["high", "medium", "low"] },
           durationMin: { type: ["number", "null"] },
           durationMax: { type: ["number", "null"] },
           costMinPHP: { type: ["number", "null"] },
           costMaxPHP: { type: ["number", "null"] },
-          costBasis: { type: "string", enum: ["person", "vehicle", "unknown"] },
+          costBasis: { type: "string", enum: ["person", "vehicle", "free", "unknown"] },
           why: { type: "string" },
           caveats: { type: "array", maxItems: 4, items: { type: "string" } },
           steps: {
@@ -67,7 +67,7 @@ const SYSTEM = `You are SaanTayo's Philippine travel route advisor. Your job is 
 
 Use Google Maps and Google Search grounding before answering. Resolve natural place names into the most likely specific Philippine place using trip context. If an endpoint remains genuinely ambiguous, return status "clarify" with up to 3 concrete suggestions instead of guessing.
 
-For route options, provide practical door-to-door estimates for Grab/taxi, rail, and local transport only when evidence supports them. Prefer ranges over false precision. Never invent an exact vehicle number, platform, headsign, stop, departure time, signboard, or fare. If evidence is weak, use null, a broad range, or omit that option. Costs are PHP. Keep steps short and useful: where to walk, what mode to board, useful transfer area or landmark, and where to get off. Do not tell the user to leave SaanTayo; outside apps are optional confirmation tools only.
+For route options, provide practical door-to-door estimates for walking (when places are nearby/walkable), Grab/taxi, rail, and local transport only when evidence supports them. Prefer ranges over false precision. Never invent an exact vehicle number, platform, headsign, stop, departure time, signboard, or fare. If evidence is weak, use null, a broad range, or omit that option. Walking cost is 0 PHP. Keep steps short and useful: where to walk, what mode to board, useful transfer area or landmark, and where to get off. Do not tell the user to leave SaanTayo; outside apps are optional confirmation tools only.
 
 This is advisory guidance, not turn-by-turn navigation. Distinguish grounded estimates from verified provider data.`;
 
@@ -142,13 +142,13 @@ export function normalizeJourneyAdvice(raw, evidence = {}) {
   const options = list(raw?.options)
     .slice(0, 3)
     .flatMap((option) => {
-      if (!option || !["grab", "train", "local"].includes(option.mode)) return [];
+      if (!option || !["walk", "grab", "train", "local"].includes(option.mode)) return [];
       let durationMin = bounded(option.durationMin, 0, 1440);
       let durationMax = bounded(option.durationMax, 0, 1440);
       if (durationMin !== null && durationMax !== null && durationMax < durationMin)
         [durationMin, durationMax] = [durationMax, durationMin];
-      let costMinPHP = bounded(option.costMinPHP, 0, 50000);
-      let costMaxPHP = bounded(option.costMaxPHP, 0, 50000);
+      let costMinPHP = option.mode === "walk" ? 0 : bounded(option.costMinPHP, 0, 50000);
+      let costMaxPHP = option.mode === "walk" ? 0 : bounded(option.costMaxPHP, 0, 50000);
       if (costMinPHP !== null && costMaxPHP !== null && costMaxPHP < costMinPHP)
         [costMinPHP, costMaxPHP] = [costMaxPHP, costMinPHP];
       return [{
@@ -159,7 +159,7 @@ export function normalizeJourneyAdvice(raw, evidence = {}) {
         durationMax,
         costMinPHP,
         costMaxPHP,
-        costBasis: ["person", "vehicle", "unknown"].includes(option.costBasis) ? option.costBasis : "unknown",
+        costBasis: option.mode === "walk" ? "free" : ["person", "vehicle", "free", "unknown"].includes(option.costBasis) ? option.costBasis : "unknown",
         why: text(option.why, 320),
         caveats: list(option.caveats).slice(0, 4).map((x) => text(x, 240)).filter(Boolean),
         steps: list(option.steps).slice(0, 8).flatMap((step) => {
@@ -183,7 +183,7 @@ export function normalizeJourneyAdvice(raw, evidence = {}) {
     confidence: ["high", "medium", "low"].includes(raw?.confidence) ? raw.confidence : "low",
     assumption: text(raw?.assumption, 320),
     summary: text(raw?.summary, 500),
-    recommendedMode: ["grab", "train", "local"].includes(raw?.recommendedMode) ? raw.recommendedMode : null,
+    recommendedMode: ["walk", "grab", "train", "local"].includes(raw?.recommendedMode) ? raw.recommendedMode : null,
     options: groundedStatus === "grounded" ? options : [],
     suggestions: groundedStatus === "clarify" ? suggestions : [],
     sources,

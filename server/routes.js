@@ -33,6 +33,17 @@ export const FIELD_MASKS = Object.freeze({
     ].map((x) => STEP_MASK + x),
   ].join(","),
   DRIVE: [...GEOCODING_MASK, "routes.duration", "routes.distanceMeters", "routes.travelAdvisory.tollInfo"].join(","),
+  WALK: [
+    ...GEOCODING_MASK,
+    "routes.duration",
+    "routes.distanceMeters",
+    ...[
+      "travelMode",
+      "staticDuration",
+      "distanceMeters",
+      "navigationInstruction.instructions",
+    ].map((x) => STEP_MASK + x),
+  ].join(","),
 });
 const seconds = (value) =>
   typeof value === "string" && /^\d+(\.\d+)?s$/.test(value)
@@ -307,6 +318,64 @@ export function normalizeGoogleDriving(response, query, calibration, now) {
       ];
     });
 }
+export function normalizeGoogleWalking(response, query) {
+  return array(response?.routes)
+    .slice(0, 1)
+    .flatMap((route) => {
+      const durationMinutes = seconds(route?.duration),
+        distanceMeters = number(route?.distanceMeters);
+      if (durationMinutes === null || distanceMeters === null) return [];
+      const rawSteps = array(route?.legs).flatMap((leg) => array(leg?.steps));
+      const steps = [
+        { type: "start", title: query.origin, source: "google_routes" },
+      ];
+      for (const s of rawSteps) {
+        if (!s || s.travelMode !== "WALK") continue;
+        steps.push({
+          type: "walk",
+          title: "Walk",
+          instruction: text(s.navigationInstruction?.instructions, 600),
+          durationMinutes: seconds(s.staticDuration),
+          distanceMeters: number(s.distanceMeters),
+          source: "google_routes",
+        });
+      }
+      if (steps.length === 1) {
+        steps.push({
+          type: "walk",
+          title: "Walk to destination",
+          durationMinutes,
+          distanceMeters,
+          source: "google_routes",
+        });
+      }
+      steps.push({
+        type: "arrive",
+        title: query.destination,
+        source: "google_routes",
+      });
+      return [
+        {
+          ...query,
+          mode: "walk",
+          label: "🚶 Walk",
+          source: "google_routes",
+          durationMinutes,
+          distanceMeters,
+          totalCostPHP: 0,
+          costSource: "free_walk",
+          costBasis: "free",
+          walkingMinutes: durationMinutes,
+          transferCount: 0,
+          sourceAttribution: ["Google Maps · walking data"],
+          warnings: [
+            "Pedestrian conditions, weather, and sidewalk availability may vary. Stay alert in traffic.",
+          ],
+          steps,
+        },
+      ];
+    });
+}
 async function boundedJson(response) {
   if (!response.ok || !response.body) throw new Error("provider_unavailable");
   const reader = response.body.getReader();
@@ -349,7 +418,9 @@ export function createGoogleProvider({
         regionCode: "PH",
         ...(travelMode === "DRIVE"
           ? { routingPreference: "TRAFFIC_AWARE", extraComputations: ["TOLLS"] }
-          : { computeAlternativeRoutes: true }),
+          : travelMode === "WALK"
+            ? {}
+            : { computeAlternativeRoutes: true }),
       };
       const id = JSON.stringify(body);
       if (!pending.has(id))
@@ -456,6 +527,24 @@ export async function planJourney(
       );
     } catch {
       failed++;
+    }
+  }
+  const driveResult =
+    results[1]?.status === "fulfilled" ? results[1].value : null;
+  const transitResult =
+    results[0]?.status === "fulfilled" ? results[0].value : null;
+  const driveDistance = number(driveResult?.routes?.[0]?.distanceMeters);
+  const transitDistance = number(transitResult?.routes?.[0]?.distanceMeters);
+  const shortestDistance =
+    driveDistance !== null ? driveDistance : transitDistance;
+
+  if (shortestDistance !== null && shortestDistance <= 2500) {
+    try {
+      const walkResult = await google.lookup(query, "WALK");
+      const walkRoutes = normalizeGoogleWalking(walkResult, query);
+      routes.push(...walkRoutes);
+    } catch {
+      // Non-fatal; preserve driving and transit routes if walk lookup fails.
     }
   }
   return recommendJourney(
