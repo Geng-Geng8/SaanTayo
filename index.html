@@ -590,20 +590,70 @@
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-2">
               <span class="transit-icon-chip" aria-hidden="true">🧭</span>
-              <h2>Getting Around & Local Transit</h2>
+              <h2>Transit Navigator & Wayfinder</h2>
             </div>
             <span
-              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-lime-500/20 text-lime-300 border border-lime-500/40 uppercase tracking-wide"
-              >PH Commute Advisory</span
+              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wide"
+              >PH Multi-Modal Commute</span
             >
           </div>
           <p class="muted">
-            Practical routes, payment methods (Cash/GCash/Beep), and realistic fare expectations for this trip.
+            Interactive route steppers, Grab benchmarks, LRT/MRT connections, and authentic Jeepney dashboard signboards with local fare etiquette.
           </p>
+
+          <!-- Transit Mode Filter Bar -->
+          <div
+            id="transitFilterBar"
+            role="tablist"
+            aria-label="Transit mode filter"
+            class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800"
+          >
+            <button
+              id="transitFilterAll"
+              type="button"
+              role="tab"
+              data-transit-filter="all"
+              aria-selected="true"
+              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 font-bold transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>🌐</span> All Modes
+            </button>
+            <button
+              id="transitFilterGrab"
+              type="button"
+              role="tab"
+              data-transit-filter="grab"
+              aria-selected="false"
+              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>🚗</span> Grab / Taxi
+            </button>
+            <button
+              id="transitFilterTrain"
+              type="button"
+              role="tab"
+              data-transit-filter="train"
+              aria-selected="false"
+              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>🚆</span> Train (LRT/MRT)
+            </button>
+            <button
+              id="transitFilterLocal"
+              type="button"
+              role="tab"
+              data-transit-filter="local"
+              aria-selected="false"
+              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>🛺</span> Jeepney / Local
+            </button>
+          </div>
+
           <!-- Transit Cards Grid -->
           <div
             id="transitCardsGrid"
-            class="grid grid-cols-1 md:grid-cols-2 gap-3"
+            class="grid grid-cols-1 lg:grid-cols-2 gap-3"
           ></div>
           <!-- Transit Quick-Link Action Bar -->
           <div class="pt-2 border-t border-slate-800 space-y-2">

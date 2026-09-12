@@ -311,6 +311,163 @@ test("transit navigator renders high-contrast transit cards and deep links", asy
 
   app.dom.window.close();
 });
+test("transit wayfinder supports multi-modal switching, route steppers, signboards and mode filter", async () => {
+  const multiModalTransitBlock = `## Day 1 Plan
+Transfer between districts.
+
+\`\`\`transit
+[
+  {
+    "legTitle": "BGC to Intramuros",
+    "modes": {
+      "grab": {
+        "duration": "35 mins",
+        "costPHP": "₱350 - ₱420",
+        "payment": "GrabPay / CC",
+        "tip": "Use Skyway during peak hours.",
+        "steps": [
+          { "node": "Book GrabCar at Market! Market! Bay", "detail": "Verify plate number" },
+          { "node": "Alight at Intramuros Gate", "detail": "Direct drop-off at entrance" }
+        ]
+      },
+      "train": {
+        "duration": "45 mins",
+        "costPHP": "₱50 - ₱65",
+        "payment": "Beep Card",
+        "steps": [
+          { "node": "Board MRT-3 at Ayala Station", "detail": "Tap Beep Card" },
+          { "node": "Transfer at Taft Station to LRT-1", "detail": "Take connecting footbridge" },
+          { "node": "Alight at Central Terminal Station", "detail": "Walk 5 mins to gate" }
+        ]
+      },
+      "local": {
+        "duration": "60 mins",
+        "costPHP": "₱25 - ₱35",
+        "payment": "Cash only",
+        "signboard": "QUIAPO - TAFT - LAWTON",
+        "steps": [
+          { "node": "Board Modern Jeepney", "detail": "Hand fare forward: 'Bayad po'" },
+          { "node": "Alight at Manila City Hall", "detail": "Call out: 'Para po'" }
+        ]
+      }
+    }
+  }
+]
+\`\`\`
+`;
+
+  const app = await setup({
+    post: (url) => {
+      if (url.endsWith("/travel")) {
+        return Response.json({
+          result: normalizeInteraction(interaction(multiModalTransitBlock)),
+          conversation: "signed-test-token",
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+  await app.generate();
+
+  const transitCards = app.$("transitCardsGrid").querySelectorAll(".transit-card");
+  assert.equal(transitCards.length, 1);
+  const card = transitCards[0];
+
+  // Verify route title
+  const title = card.querySelector(".transit-leg-title");
+  assert.ok(title);
+  assert.equal(title.textContent, "BGC to Intramuros");
+
+  // Verify mode tabs exist for grab, train, local
+  const tabs = card.querySelectorAll(".transit-mode-tab");
+  assert.equal(tabs.length, 3);
+
+  // Grab is active initially: verify stepper
+  const initialStepper = card.querySelector(".transit-stepper");
+  assert.ok(initialStepper);
+  const grabSteps = initialStepper.querySelectorAll(".transit-step-row");
+  assert.equal(grabSteps.length, 2);
+
+  // Switch to Train tab (index 1)
+  tabs[1].click();
+  const trainStepper = card.querySelector(".transit-stepper");
+  assert.ok(trainStepper);
+  const trainSteps = trainStepper.querySelectorAll(".transit-step-row");
+  assert.equal(trainSteps.length, 3);
+  assert.ok(card.textContent.includes("Ayala Station"));
+
+  // Switch to Local tab (index 2)
+  tabs[2].click();
+  const signboard = card.querySelector(".transit-signboard");
+  assert.ok(signboard);
+  const signText = card.querySelector(".transit-signboard-text");
+  assert.ok(signText);
+  assert.equal(signText.textContent, "QUIAPO - TAFT - LAWTON");
+
+  // Test top filter buttons
+  const localFilterBtn = app.$("transitSection").querySelector("[data-transit-filter='local']");
+  assert.ok(localFilterBtn);
+  // Verify 1-tap Google Maps button
+  const mapsBtn = card.querySelector(".transit-maps-btn");
+  assert.ok(mapsBtn);
+  assert.ok(mapsBtn.href.includes("google.com/maps/dir/?api=1&destination=Intramuros"));
+
+  app.dom.window.close();
+});
+test("transit card de-duplicates tips and cleans generic Grab filler steps", async () => {
+  const genericGrabBlock = `## Transit
+\`\`\`transit
+[
+  {
+    "legTitle": "Makati to BGC",
+    "modes": {
+      "grab": {
+        "duration": "20 mins",
+        "costPHP": "₱200 - ₱250",
+        "payment": "GrabPay",
+        "tip": "Use Kalayaan Flyover for faster transit.",
+        "steps": [
+          { "node": "Book GrabCar", "detail": "Use Kalayaan Flyover for faster transit." },
+          { "node": "Alight at destination", "detail": "Arrive at route endpoint" }
+        ]
+      }
+    }
+  }
+]
+\`\`\`
+`;
+
+  const app = await setup({
+    post: (url) => {
+      if (url.endsWith("/travel")) {
+        return Response.json({
+          result: normalizeInteraction(interaction(genericGrabBlock)),
+          conversation: "signed-test-token",
+        });
+      }
+      return Response.json({ status: "success" });
+    },
+  });
+  await app.generate();
+
+  const card = app.$("transitCardsGrid").querySelector(".transit-card");
+  assert.ok(card);
+
+  // 1. Generic Grab filler step "Alight at destination" should be omitted
+  const stepRows = card.querySelectorAll(".transit-step-row");
+  assert.equal(stepRows.length, 1);
+  assert.equal(stepRows[0].querySelector(".transit-step-title").textContent, "Book GrabCar");
+
+  // 2. Tip duplicate inside detail should be omitted since tip is rendered in the lightbulb box
+  const stepDetail = stepRows[0].querySelector(".transit-step-detail");
+  assert.equal(stepDetail, null);
+
+  const tipBox = card.querySelector(".transit-tip");
+  assert.ok(tipBox);
+  assert.ok(tipBox.textContent.includes("Kalayaan Flyover"));
+
+  app.dom.window.close();
+});
 test("culinary and dining guide renders dining cards with map deep links", async () => {
   const app = await setup();
   await app.generate();

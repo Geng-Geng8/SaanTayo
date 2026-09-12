@@ -55,6 +55,7 @@ const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
+  activeTransitFilter = "all",
   activePartnerFilter = "all",
   sharedTrips = [],
   hasSharedSnapshot = false,
@@ -371,15 +372,47 @@ function renderTransit() {
     destination: current.trip.destination,
   });
 
+  // Synchronize top filter buttons
+  document.querySelectorAll("[data-transit-filter]").forEach((b) => {
+    const isSelected = b.dataset.transitFilter === activeTransitFilter;
+    b.setAttribute("aria-selected", isSelected ? "true" : "false");
+    b.className = `transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${
+      isSelected
+        ? "bg-cyan-500 text-slate-950 font-bold"
+        : "text-slate-400 hover:text-white bg-slate-900 border border-slate-800"
+    }`;
+  });
+
+  const filteredLegs =
+    activeTransitFilter === "all"
+      ? legs
+      : legs.filter((leg) => {
+          if (leg.modes && typeof leg.modes === "object") {
+            return Boolean(leg.modes[activeTransitFilter]);
+          }
+          return (leg.mode || "")
+            .toLowerCase()
+            .includes(activeTransitFilter.toLowerCase());
+        });
+
+  const displayLegs = filteredLegs.length ? filteredLegs : legs;
+
   const grid = $("transitCardsGrid");
   grid.replaceChildren();
-  for (const leg of legs) {
+  for (const leg of displayLegs) {
     const isPinned = savedItems.some(
       (s) =>
         s.itemType === "transport" &&
-        s.name?.toLowerCase() === (leg.route || "").toLowerCase(),
+        s.name?.toLowerCase() ===
+          (leg.legTitle || leg.route || "").toLowerCase(),
     );
-    grid.append(renderTransitCard(leg, { onPin: pinTransit, isPinned }));
+    grid.append(
+      renderTransitCard(leg, {
+        onPin: pinTransit,
+        isPinned,
+        preferredMode: activeTransitFilter,
+      }),
+    );
   }
 
   const links = buildTransitLinks(
@@ -949,11 +982,19 @@ async function pinActivity(activity) {
   });
 }
 
-async function pinTransit(leg) {
+async function pinTransit(leg, selectedModeKey) {
+  const modeKey = selectedModeKey || "grab";
+  const modeData =
+    leg.modes?.[modeKey] ||
+    leg.modes?.local ||
+    leg.modes?.train ||
+    {};
+  const modeName = modeData.modeName || leg.mode || "Transit";
   const routeName =
+    leg.legTitle ||
     leg.route ||
     `${leg.origin || "Origin"} → ${leg.destination || "Destination"}`;
-  const price = leg.estimatedFarePHP || "Check fare";
+  const price = modeData.costPHP || leg.estimatedFarePHP || "Check fare";
   const links = buildTransitLinks(
     leg.origin || current?.trip?.origin || "",
     leg.destination || current?.trip?.destination || "",
@@ -962,13 +1003,17 @@ async function pinTransit(leg) {
   await saveItem({
     itemType: "transport",
     name: routeName,
-    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim(),
-    category: leg.mode || "Transit",
+    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim() || routeName,
+    category: modeName,
     price,
     link,
     details: {
-      paymentMethod: leg.paymentMethod || "Cash only",
-      localTip: leg.localTip || "",
+      mode: modeName,
+      duration: modeData.duration || "",
+      paymentMethod: modeData.payment || leg.paymentMethod || "Cash only",
+      signboard: modeData.signboard || "",
+      localTip: modeData.tip || leg.localTip || "",
+      firstStep: modeData.steps?.[0]?.node || "",
     },
   });
 }
@@ -1650,6 +1695,11 @@ for (const button of document.querySelectorAll("[data-stay-filter]"))
   button.addEventListener("click", () => {
     activeStayFilter = button.dataset.stayFilter;
     renderAccommodations();
+  });
+for (const button of document.querySelectorAll("[data-transit-filter]"))
+  button.addEventListener("click", () => {
+    activeTransitFilter = button.dataset.transitFilter;
+    renderTransit();
   });
 for (const radio of document.querySelectorAll('input[name="party"]'))
   radio.addEventListener("change", () => {

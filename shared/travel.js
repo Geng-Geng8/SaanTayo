@@ -260,39 +260,290 @@ export function parseTransitLegs(
   text,
   { origin = "", destination = "Destination" } = {},
 ) {
+  const safeStr = (val, max = 300, fallback = "") => {
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (trimmed) return trimmed.slice(0, max);
+    }
+    return fallback;
+  };
+
+  const normalizeSteps = (steps) => {
+    if (!Array.isArray(steps)) return [];
+    const out = [];
+    for (const s of steps) {
+      if (s && typeof s === "object") {
+        const node = safeStr(s.node, 200);
+        const detail = safeStr(s.detail, 300);
+        if (node) out.push({ node, detail });
+      } else if (typeof s === "string" && s.trim()) {
+        out.push({ node: s.trim().slice(0, 200), detail: "" });
+      }
+    }
+    return out;
+  };
+
   const result = [];
   if (typeof text === "string" && text) {
     const transitMatch =
       text.match(/```(?:transit|json:transit)\s*([\s\S]*?)\s*```/i) ||
-      text.match(/```json\s*(\[\s*\{[\s\S]*?"mode"[\s\S]*?\}\s*\])\s*```/i) ||
-      text.match(/\[\s*\{[\s\S]*?"mode"[\s\S]*?"route"[\s\S]*?\}\s*\]/i);
+      text.match(
+        /```json\s*(\[\s*\{[\s\S]*?(?:"legTitle"|"modes"|"mode")[\s\S]*?\}\s*\])\s*```/i,
+      ) ||
+      text.match(
+        /\[\s*\{[\s\S]*?(?:"legTitle"|"modes"|"mode")[\s\S]*?\}\s*\]/i,
+      );
     if (transitMatch) {
       try {
         const rawJson = JSON.parse(transitMatch[1] || transitMatch[0]);
         if (Array.isArray(rawJson)) {
           for (const item of rawJson) {
-            if (item && typeof item === "object") {
-              const rawMode = String(item.mode || "").trim();
+            if (!item || typeof item !== "object") continue;
+
+            // Case A: New multi-modal schema with `modes`
+            if (item.modes && typeof item.modes === "object") {
+              const legTitle =
+                safeStr(item.legTitle || item.route, 300) ||
+                `${origin || "Base"} to ${destination}`;
+              const modes = {};
+
+              // 1. Grab
+              if (item.modes.grab && typeof item.modes.grab === "object") {
+                const g = item.modes.grab;
+                const tip = safeStr(g.tip || g.localTip, 500);
+                modes.grab = {
+                  modeKey: "grab",
+                  modeName: "Grab / Taxi",
+                  duration: safeStr(g.duration, 100, "30-45 mins"),
+                  costPHP: safeStr(
+                    g.costPHP || g.estimatedFarePHP,
+                    100,
+                    "₱300 - ₱450",
+                  ),
+                  payment: safeStr(
+                    g.payment || g.paymentMethod,
+                    100,
+                    "GrabPay / CC / Cash",
+                  ),
+                  tip,
+                  steps: normalizeSteps(g.steps).length
+                    ? normalizeSteps(g.steps)
+                    : [
+                        {
+                          node: "Book ride via Grab App",
+                          detail: "Check vehicle plate and pickup point",
+                        },
+                        {
+                          node: "Direct route to destination",
+                          detail: tip || "Air-conditioned point-to-point ride",
+                        },
+                      ],
+                };
+              }
+
+              // 2. Train
+              if (item.modes.train && typeof item.modes.train === "object") {
+                const t = item.modes.train;
+                const tip = safeStr(t.tip || t.localTip, 500);
+                modes.train = {
+                  modeKey: "train",
+                  modeName: "Train / Rail",
+                  duration: safeStr(t.duration, 100, "40-55 mins"),
+                  costPHP: safeStr(
+                    t.costPHP || t.estimatedFarePHP,
+                    100,
+                    "₱45 - ₱65",
+                  ),
+                  payment: safeStr(
+                    t.payment || t.paymentMethod,
+                    100,
+                    "Beep Card",
+                  ),
+                  tip,
+                  steps: normalizeSteps(t.steps).length
+                    ? normalizeSteps(t.steps)
+                    : [
+                        {
+                          node: "Board rail line at nearest station",
+                          detail: "Tap Beep Card or buy Single Journey ticket",
+                        },
+                        {
+                          node: "Alight at destination station",
+                          detail: "Follow station exit towards local transit",
+                        },
+                      ],
+                };
+              }
+
+              // 3. Local (Jeepney, Tricycle, Bus)
+              if (item.modes.local && typeof item.modes.local === "object") {
+                const l = item.modes.local;
+                const tip = safeStr(
+                  l.tip || l.localTip,
+                  500,
+                  "Hand fare forward: 'Bayad po'; call 'Para po' to stop.",
+                );
+                modes.local = {
+                  modeKey: "local",
+                  modeName: "Jeepney / Local",
+                  duration: safeStr(l.duration, 100, "50-70 mins"),
+                  costPHP: safeStr(
+                    l.costPHP || l.estimatedFarePHP,
+                    100,
+                    "₱25 - ₱40",
+                  ),
+                  payment: safeStr(
+                    l.payment || l.paymentMethod,
+                    100,
+                    "Cash (Keep ₱20/₱50 bills ready)",
+                  ),
+                  signboard: safeStr(l.signboard, 150),
+                  tip,
+                  steps: normalizeSteps(l.steps).length
+                    ? normalizeSteps(l.steps)
+                    : [
+                        {
+                          node: "Board Traditional / Modern e-Jeepney",
+                          detail: "Hand fare forward: 'Bayad po'",
+                        },
+                        {
+                          node: "Alight at destination corner",
+                          detail: "Call out clearly: 'Para po'",
+                        },
+                      ],
+                };
+              }
+
+              // Other optional modes (ferry, bus, tricycle)
+              for (const [key, val] of Object.entries(item.modes)) {
+                if (
+                  !["grab", "train", "local"].includes(key) &&
+                  val &&
+                  typeof val === "object"
+                ) {
+                  const tip = safeStr(val.tip || val.localTip, 500);
+                  modes[key] = {
+                    modeKey: key,
+                    modeName: key.charAt(0).toUpperCase() + key.slice(1),
+                    duration: safeStr(val.duration, 100, "30-60 mins"),
+                    costPHP: safeStr(
+                      val.costPHP || val.estimatedFarePHP,
+                      100,
+                      "₱50 - ₱150",
+                    ),
+                    payment: safeStr(
+                      val.payment || val.paymentMethod,
+                      100,
+                      "Cash",
+                    ),
+                    tip,
+                    steps: normalizeSteps(val.steps),
+                  };
+                }
+              }
+
+              if (!Object.keys(modes).length) {
+                modes.local = {
+                  modeKey: "local",
+                  modeName: "Local Commute",
+                  duration: "30-50 mins",
+                  costPHP: "₱25 - ₱50",
+                  payment: "Cash only",
+                  steps: [
+                    {
+                      node: "Board local commute route",
+                      detail: "Confirm destination with driver before boarding",
+                    },
+                  ],
+                };
+              }
+
+              // Primary mode for backward-compatibility assertions
+              const primaryKey = modes.grab
+                ? "grab"
+                : modes.train
+                  ? "train"
+                  : Object.keys(modes)[0];
+              const primary = modes[primaryKey];
+              const primaryModeBadge = primary.modeName.includes("Grab")
+                ? "Grab"
+                : primary.modeName.includes("Train")
+                  ? "Train"
+                  : "Jeepney";
+
+              result.push({
+                legTitle,
+                route: legTitle,
+                mode: primaryModeBadge,
+                estimatedFarePHP: primary.costPHP,
+                paymentMethod: primary.payment,
+                localTip:
+                  primary.tip || "Confirm route and fare before boarding.",
+                modes,
+              });
+            } else if (item.mode || item.route) {
+              // Case B: Legacy flat schema
+              const rawMode = safeStr(item.mode, 50, "Jeepney");
               const matchedMode =
                 TRANSIT_MODES.find(
                   (m) => m.toLowerCase() === rawMode.toLowerCase(),
                 ) ||
                 rawMode ||
                 "Jeepney";
+              const route =
+                safeStr(item.route, 300) ||
+                `${origin || "Base"} to ${destination}`;
+              const estimatedFarePHP = safeStr(
+                item.estimatedFarePHP,
+                100,
+                "₱50 - ₱150",
+              );
+              const paymentMethod = safeStr(
+                item.paymentMethod,
+                100,
+                "Cash only",
+              );
+              const localTip = safeStr(
+                item.localTip,
+                500,
+                "Confirm fare before boarding.",
+              );
+
+              const modeKey = matchedMode.toLowerCase().includes("grab")
+                ? "grab"
+                : matchedMode.toLowerCase().includes("train")
+                  ? "train"
+                  : "local";
+
+              const modes = {
+                [modeKey]: {
+                  modeKey,
+                  modeName: matchedMode,
+                  duration: "30-50 mins",
+                  costPHP: estimatedFarePHP,
+                  payment: paymentMethod,
+                  tip: localTip,
+                  steps: [
+                    {
+                      node: `Board ${matchedMode}`,
+                      detail: localTip || "Confirm fare before boarding",
+                    },
+                    {
+                      node: `Alight at destination`,
+                      detail: "Arrive at route endpoint",
+                    },
+                  ],
+                },
+              };
+
               result.push({
+                legTitle: route,
+                route,
                 mode: matchedMode,
-                route:
-                  textValue(item.route, "Route", 300, true) ||
-                  `${origin || "Base"} to ${destination}`,
-                estimatedFarePHP:
-                  textValue(item.estimatedFarePHP, "Estimated fare", 100, true) ||
-                  "₱50 - ₱150",
-                paymentMethod:
-                  textValue(item.paymentMethod, "Payment method", 100, true) ||
-                  "Cash only",
-                localTip:
-                  textValue(item.localTip, "Local tip", 500, true) ||
-                  "Confirm fare before boarding.",
+                estimatedFarePHP,
+                paymentMethod,
+                localTip,
+                modes,
               });
             }
           }
@@ -304,30 +555,234 @@ export function parseTransitLegs(
   if (!result.length) {
     const dest = (destination || "Local Area").trim();
     const orig = (origin || "Arrival Hub").trim();
+
     result.push(
       {
-        mode: "Grab",
+        legTitle: `${orig} to ${dest} City Center`,
         route: `${orig} to ${dest} City Center`,
+        mode: "Grab",
         estimatedFarePHP: "₱250 - ₱450",
         paymentMethod: "GCash / GrabPay / Cash",
         localTip:
           "Best for fixed fares, airport pickups, and air-conditioned travel.",
+        modes: {
+          grab: {
+            modeKey: "grab",
+            modeName: "Grab / Taxi",
+            duration: "30-45 mins",
+            costPHP: "₱250 - ₱450",
+            payment: "GCash / GrabPay / Cash",
+            tip: "Book GrabCar from designated airport pickup bays to avoid unmetered meter queues.",
+            steps: [
+              {
+                node: `Board GrabCar at ${orig} Pick-up Zone`,
+                detail: "Verify vehicle license plate in Grab App",
+              },
+              {
+                node: "Expressway / Highway Transit",
+                detail:
+                  "Request driver take Skyway / Express tollway if traffic is heavy",
+              },
+              {
+                node: `Alight at ${dest} City Center`,
+                detail: "Direct drop-off at your hotel or accommodation",
+              },
+            ],
+          },
+          train: {
+            modeKey: "train",
+            modeName: "Train / Rail",
+            duration: "35-50 mins",
+            costPHP: "₱35 - ₱55",
+            payment: "Beep Card / Ticket Counter",
+            tip: "Tap Beep Card at turnstiles; carry backpacks in front during boarding.",
+            steps: [
+              {
+                node: "Walk to Metro Rail Station",
+                detail: "Tap Beep Card or buy Single Journey Ticket",
+              },
+              {
+                node: "Board Main Rail Line",
+                detail: "Take train toward Central Station",
+              },
+              {
+                node: `Alight at ${dest} Central Station`,
+                detail: "Take station footbridge towards local transit loop",
+              },
+            ],
+          },
+          local: {
+            modeKey: "local",
+            modeName: "Jeepney / Local",
+            duration: "45-65 mins",
+            costPHP: "₱20 - ₱35",
+            payment: "Cash (Keep ₱20/₱50 bills ready)",
+            signboard: `${dest.toUpperCase()} VIA HIGHWAY / CITY LOOP`,
+            tip: "Hand fare forward saying 'Bayad po' and call out 'Para po' to alight.",
+            steps: [
+              {
+                node: "Board Traditional / Modern e-Jeepney",
+                detail: "Verify dashboard signboard text before boarding",
+              },
+              {
+                node: "Hand fare forward",
+                detail: "Pass exact fare: 'Bayad po sa isa / dalawa'",
+              },
+              {
+                node: `Alight at ${dest} Main Corner`,
+                detail: "Call out clearly: 'Para po!'",
+              },
+            ],
+          },
+        },
       },
       {
-        mode: "Jeepney",
+        legTitle: `${dest} Main Highway & Landmark Loop`,
         route: `${dest} Main Highway & Landmark Loop`,
+        mode: "Jeepney",
         estimatedFarePHP: "₱15 - ₱30",
         paymentMethod: "Cash only (exact change preferred)",
         localTip:
           "Pass your fare forward saying 'Bayad po' and tap the ceiling or say 'Para po' to alight.",
+        modes: {
+          grab: {
+            modeKey: "grab",
+            modeName: "Grab / Taxi",
+            duration: "15-25 mins",
+            costPHP: "₱150 - ₱250",
+            payment: "GrabPay / Cash",
+            tip: "Quickest option during midday heat.",
+            steps: [
+              {
+                node: "Hail Metered Taxi or Book GrabCar",
+                detail: "Ensure taxi meter is flagged down",
+              },
+              {
+                node: "Direct Transit",
+                detail: "Short city ride through commercial district",
+              },
+              {
+                node: "Alight at Landmark Entrance",
+                detail: "Convenient roadside drop-off",
+              },
+            ],
+          },
+          train: {
+            modeKey: "train",
+            modeName: "Train / Rail",
+            duration: "20-35 mins",
+            costPHP: "₱20 - ₱35",
+            payment: "Beep Card",
+            tip: "Check station exits for closest street access.",
+            steps: [
+              {
+                node: "Enter District Station",
+                detail: "Tap Beep Card",
+              },
+              {
+                node: "Board Local Rail Transit",
+                detail: "Ride 3-4 stops along main transit spine",
+              },
+              {
+                node: "Alight at Landmark Station",
+                detail: "Follow signs towards tourist district",
+              },
+            ],
+          },
+          local: {
+            modeKey: "local",
+            modeName: "Jeepney / Local",
+            duration: "30-45 mins",
+            costPHP: "₱15 - ₱30",
+            payment: "Cash only (exact change preferred)",
+            signboard: `${dest.toUpperCase()} - HERITAGE / COMMERCIAL LOOP`,
+            tip: "Pass your fare forward saying 'Bayad po' and call out 'Para po' to alight.",
+            steps: [
+              {
+                node: "Board Traditional / Modern e-Jeepney",
+                detail: "Pass fare forward saying 'Bayad po'",
+              },
+              {
+                node: "Transit along landmark avenue",
+                detail: "Watch for prominent buildings and corners",
+              },
+              {
+                node: "Alight at destination corner",
+                detail: "Tap ceiling or say 'Para po'",
+              },
+            ],
+          },
+        },
       },
       {
-        mode: "Tricycle",
+        legTitle: `${dest} Local Town Center / Beach Access`,
         route: `${dest} Local Town Center / Beach Access`,
+        mode: "Tricycle",
         estimatedFarePHP: "₱50 - ₱150",
         paymentMethod: "Cash only",
         localTip:
           "Negotiate special trip vs regular route fare before getting in.",
+        modes: {
+          grab: {
+            modeKey: "grab",
+            modeName: "Grab / Taxi",
+            duration: "15-25 mins",
+            costPHP: "₱180 - ₱320",
+            payment: "GrabPay / Cash",
+            tip: "Confirm destination exact landmark with driver.",
+            steps: [
+              {
+                node: "Book GrabCar or local private hire",
+                detail: "Set pin at coastal/beach access point",
+              },
+              {
+                node: "Scenic Drive",
+                detail: "Point-to-point drop-off at beach road",
+              },
+            ],
+          },
+          train: {
+            modeKey: "train",
+            modeName: "Train / Shuttle",
+            duration: "25-40 mins",
+            costPHP: "₱30 - ₱50",
+            payment: "Cash / Beep",
+            tip: "Shuttle vans or local terminal buses connect to coastal roads.",
+            steps: [
+              {
+                node: "Board terminal coastal shuttle",
+                detail: "Wait for departure at designated bay",
+              },
+              {
+                node: "Alight at Beach Junction",
+                detail: "Short walk or tricycle to shore",
+              },
+            ],
+          },
+          local: {
+            modeKey: "local",
+            modeName: "Tricycle / Jeepney",
+            duration: "20-35 mins",
+            costPHP: "₱50 - ₱150",
+            payment: "Cash only",
+            signboard: `${dest.toUpperCase()} - SHORELINE / BEACH RESORTS`,
+            tip: "Agree on 'special trip' fare before boarding if traveling with luggage.",
+            steps: [
+              {
+                node: "Board Tricycle at Town Terminal",
+                detail: "Negotiate special trip vs regular fare first",
+              },
+              {
+                node: "Scenic open-air transit",
+                detail: "Keep bags secure inside tricycle cab",
+              },
+              {
+                node: "Alight at Resort / Beach Front",
+                detail: "Pay cash directly to driver",
+              },
+            ],
+          },
+        },
       },
     );
   }

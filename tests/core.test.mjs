@@ -190,6 +190,71 @@ Take an early transfer to the pier.
   assert.ok(fallbackLegs.length >= 3);
   assert.equal(fallbackLegs[0].mode, "Grab");
 });
+test("parseTransitLegs parses multi-modal transit schema with grab, train, local steps, and signboard", () => {
+  const multiModalMarkdown = `## Itinerary Day 1
+Commute options between hubs.
+
+\`\`\`transit
+[
+  {
+    "legTitle": "BGC to Intramuros",
+    "modes": {
+      "grab": {
+        "duration": "30-45 mins",
+        "costPHP": "₱320 - ₱420",
+        "payment": "GrabPay / CC / Cash",
+        "tip": "Request driver use NAIAX / Skyway during 4-7 PM peak traffic"
+      },
+      "train": {
+        "duration": "40-55 mins",
+        "costPHP": "₱45 - ₱65",
+        "payment": "Beep Card",
+        "steps": [
+          { "node": "Board MRT-3 at Ayala Station (Northbound)", "detail": "Tap Beep Card" },
+          { "node": "Transfer at Taft Avenue Station to LRT-1", "detail": "Follow footbridge" },
+          { "node": "Alight at Central Terminal Station", "detail": "Walk 5 mins to walled gate" }
+        ]
+      },
+      "local": {
+        "duration": "50-70 mins",
+        "costPHP": "₱25 - ₱40",
+        "payment": "Cash (Keep ₱20/₱50 bills ready)",
+        "signboard": "QUIAPO - TAFT AVE - LAWTON",
+        "steps": [
+          { "node": "Board Traditional / Modern e-Jeepney", "detail": "Hand fare forward: 'Bayad po'" },
+          { "node": "Alight at destination corner", "detail": "Call out: 'Para po'" }
+        ]
+      }
+    }
+  }
+]
+\`\`\`
+`;
+
+  const legs = parseTransitLegs(multiModalMarkdown, {
+    origin: "BGC",
+    destination: "Intramuros",
+  });
+  assert.equal(legs.length, 1);
+  assert.equal(legs[0].legTitle, "BGC to Intramuros");
+  assert.ok(legs[0].modes.grab);
+  assert.equal(legs[0].modes.grab.duration, "30-45 mins");
+  assert.equal(legs[0].modes.grab.costPHP, "₱320 - ₱420");
+  assert.equal(legs[0].modes.grab.payment, "GrabPay / CC / Cash");
+  assert.ok(legs[0].modes.grab.tip.includes("Skyway"));
+
+  assert.ok(legs[0].modes.train);
+  assert.equal(legs[0].modes.train.steps.length, 3);
+  assert.equal(legs[0].modes.train.steps[0].node, "Board MRT-3 at Ayala Station (Northbound)");
+  assert.equal(legs[0].modes.train.steps[0].detail, "Tap Beep Card");
+  assert.equal(legs[0].modes.train.steps[1].node, "Transfer at Taft Avenue Station to LRT-1");
+
+  assert.ok(legs[0].modes.local);
+  assert.equal(legs[0].modes.local.signboard, "QUIAPO - TAFT AVE - LAWTON");
+  assert.equal(legs[0].modes.local.steps.length, 2);
+  assert.equal(legs[0].modes.local.steps[0].detail, "Hand fare forward: 'Bayad po'");
+  assert.equal(legs[0].modes.local.steps[1].detail, "Call out: 'Para po'");
+});
 test("buildTransitLinks generates valid URLs for Sakay, Grab, 12Go, Klook, and Maps", () => {
   const links = buildTransitLinks("Makati", "BGC Taguig");
   assert.equal(links.length, 5);
