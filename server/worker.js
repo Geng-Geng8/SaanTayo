@@ -186,15 +186,13 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         departureTime: new Date(Math.max(departure, now)).toISOString(),
         people: input.people,
       };
-      const journey = await planJourney(
-        journeyQuery,
-        env,
-        {
-          fetcher: deps.routesFetcher,
-          signal: request.signal,
-          timeoutMs: deps.routesTimeoutMs,
-        },
-      );
+      const plan = deps.planJourney || planJourney;
+      const routeOptions = {
+        fetcher: deps.routesFetcher,
+        signal: request.signal,
+        timeoutMs: deps.routesTimeoutMs,
+      };
+      let journey = await plan(journeyQuery, env, routeOptions);
       let advisor = null;
       const needsAdvisor =
         canAdvise &&
@@ -210,6 +208,38 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
           });
         } catch {
           advisor = null;
+        }
+      }
+      // Natural-language place names are a feature, not an error. If grounded
+      // Maps/Search evidence resolves them to specific places, give Google Routes
+      // one bounded retry so the user gets a verified route without retyping.
+      if (
+        env.GOOGLE_ROUTES_API_KEY &&
+        advisor?.status === "grounded" &&
+        advisor.resolvedOrigin &&
+        advisor.resolvedDestination &&
+        (advisor.resolvedOrigin.toLowerCase() !== from.toLowerCase() ||
+          advisor.resolvedDestination.toLowerCase() !== destination.toLowerCase())
+      ) {
+        try {
+          const resolvedQuery = {
+            ...journeyQuery,
+            origin: advisor.resolvedOrigin,
+            destination: advisor.resolvedDestination,
+          };
+          const resolved = await plan(resolvedQuery, env, routeOptions);
+          if (resolved.routes.length) {
+            journey = {
+              ...resolved,
+              warnings: [
+                `Matched your places as ${advisor.resolvedOrigin} → ${advisor.resolvedDestination} using grounded place data. The route below is verified provider data.`,
+                ...(resolved.warnings || []),
+              ],
+            };
+            advisor = null;
+          }
+        } catch {
+          // Keep the grounded advisor result; never turn a useful estimate into an error.
         }
       }
       return json({ journey, ...(advisor ? { advisor } : {}) });
