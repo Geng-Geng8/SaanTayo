@@ -5,8 +5,8 @@ import {
   calculateBudget,
   safeUrl,
   buildAllProviderLinks,
-  parseTransitLegs,
-  buildTransitLinks,
+  parseMultiModalTransit,
+  buildTransitRouteLinks,
   SHEETS_API_URL,
   cleanTripPayload,
   fetchSheetsApi,
@@ -42,8 +42,7 @@ import {
   renderProviderCard,
   renderShortlistItem,
   renderSharedTripRow,
-  renderTransitCard,
-  renderTransitLinkButton,
+  renderTransitRoute,
   renderDiningCard,
   renderActivityCard,
   renderStayCard,
@@ -55,6 +54,7 @@ const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
+  activeTransitMode = "grab",
   activePartnerFilter = "all",
   sharedTrips = [],
   hasSharedSnapshot = false,
@@ -365,32 +365,48 @@ function currency(value) {
 }
 function renderTransit() {
   if (!current?.trip) return;
-  const rawText = planText();
-  const legs = parseTransitLegs(rawText, {
+  const routes = parseMultiModalTransit(planText(), {
     origin: current.trip.origin || "Arrival Base",
     destination: current.trip.destination,
   });
+  const availableModes = [...new Set(routes.map((route) => route.mode))];
+  if (!availableModes.includes(activeTransitMode)) {
+    activeTransitMode = availableModes[0] || "grab";
+  }
 
-  const grid = $("transitCardsGrid");
-  grid.replaceChildren();
-  for (const leg of legs) {
-    const isPinned = savedItems.some(
-      (s) =>
-        s.itemType === "transport" &&
-        s.name?.toLowerCase() === (leg.route || "").toLowerCase(),
+  for (const button of document.querySelectorAll("[data-transit-mode]")) {
+    const buttonMode = button.dataset.transitMode;
+    const available = availableModes.includes(buttonMode);
+    const selected = available && buttonMode === activeTransitMode;
+    button.disabled = !available;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+
+  const panel = $("transitRoutePanel");
+  if (!panel) return;
+  panel.replaceChildren();
+  const route =
+    routes.find((candidate) => candidate.mode === activeTransitMode) || routes[0];
+  if (!route) {
+    panel.append(
+      el(
+        "p",
+        "No practical transit route was available for this plan.",
+        "muted",
+      ),
     );
-    grid.append(renderTransitCard(leg, { onPin: pinTransit, isPinned }));
+    return;
   }
 
-  const links = buildTransitLinks(
-    current.trip.origin,
-    current.trip.destination,
+  const routeName =
+    route.label || `${route.origin || "Origin"} → ${route.destination || "Destination"}`;
+  const isPinned = savedItems.some(
+    (item) =>
+      item.itemType === "transport" &&
+      item.name?.toLowerCase() === routeName.toLowerCase(),
   );
-  const linksRow = $("transitLinksRow");
-  linksRow.replaceChildren();
-  for (const item of links) {
-    linksRow.append(renderTransitLinkButton(item));
-  }
+  panel.append(renderTransitRoute(route, { onPin: pinTransit, isPinned }));
 }
 function renderDining() {
   if (!current?.trip) return;
@@ -949,26 +965,35 @@ async function pinActivity(activity) {
   });
 }
 
-async function pinTransit(leg) {
+async function pinTransit(route) {
   const routeName =
-    leg.route ||
-    `${leg.origin || "Origin"} → ${leg.destination || "Destination"}`;
-  const price = leg.estimatedFarePHP || "Check fare";
-  const links = buildTransitLinks(
-    leg.origin || current?.trip?.origin || "",
-    leg.destination || current?.trip?.destination || "",
-  );
-  const link = links[0]?.url || "";
+    route.label ||
+    route.route ||
+    `${route.origin || "Origin"} → ${route.destination || "Destination"}`;
+  const price = route.estimatedCostPHP || route.estimatedFarePHP || "Check fare";
+  const links = buildTransitRouteLinks({
+    ...route,
+    mode: route.modeId || route.mode,
+    origin: route.origin || current?.trip?.origin || "",
+    destination: route.destination || current?.trip?.destination || "",
+  });
+  const link = links.find((item) => item.id === "maps")?.url || links[0]?.url || "";
   await saveItem({
     itemType: "transport",
     name: routeName,
-    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim(),
-    category: leg.mode || "Transit",
+    location: `${route.origin || ""} → ${route.destination || ""}`.trim(),
+    category: route.vehicle || route.mode || "Transit",
     price,
     link,
     details: {
-      paymentMethod: leg.paymentMethod || "Cash only",
-      localTip: leg.localTip || "",
+      paymentMethod:
+        route.paymentCaveat || route.paymentMethod || "Confirm payment method",
+      localTip:
+        route.localTip ||
+        (route.steps || []).map((step) => step.instruction).join(" "),
+      duration: route.duration || "",
+      signboard: route.signboard || "",
+      steps: route.steps || [],
     },
   });
 }
@@ -1523,6 +1548,7 @@ $("planner").addEventListener("submit", (event) => {
       updatedAt: result.createdAt,
       costs: null,
     };
+    activeTransitMode = "grab";
     showCurrent();
     saveCurrentToSheets();
     toast("Plan ready. Save it for your trip.");
@@ -1651,6 +1677,15 @@ for (const button of document.querySelectorAll("[data-stay-filter]"))
     activeStayFilter = button.dataset.stayFilter;
     renderAccommodations();
   });
+$("transitNavigator")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-transit-mode]");
+  if (!button || button.disabled) return;
+  event.preventDefault();
+  const nextMode = button.dataset.transitMode;
+  if (!nextMode || nextMode === activeTransitMode) return;
+  activeTransitMode = nextMode;
+  renderTransit();
+});
 for (const radio of document.querySelectorAll('input[name="party"]'))
   radio.addEventListener("change", () => {
     if (radio.value === "Solo Traveler") $("people").value = "1";
