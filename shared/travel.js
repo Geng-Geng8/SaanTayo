@@ -242,96 +242,281 @@ export function buildAllProviderLinks(params) {
     .filter((p) => p.url != null);
 }
 
-export const TRANSIT_MODES = [
-  "Grab",
-  "Jeepney",
-  "Tricycle",
-  "Ferry",
-  "Bus",
-  "Train",
-];
+export const TRANSIT_MODES = ["grab", "train", "local"];
+export const TRANSIT_MODE_LABELS = {
+  grab: "Grab",
+  train: "Train/MRT",
+  local: "Jeepney/Local",
+};
+
+function transitText(value, fallback = "", max = 500) {
+  if (value == null) return fallback;
+  const clean = String(value).trim();
+  if (!clean) return fallback;
+  return clean.slice(0, max);
+}
+
+function normalizeTransitMode(value) {
+  const mode = String(value || "").trim().toLowerCase();
+  if (["grab", "grabcar", "ridehail", "ride-hail", "taxi"].includes(mode))
+    return "grab";
+  if (
+    ["train", "mrt", "mrt-3", "lrt", "lrt-1", "lrt-2", "rail"].includes(
+      mode,
+    )
+  )
+    return "train";
+  if (
+    [
+      "local",
+      "jeepney",
+      "uv",
+      "uv express",
+      "tricycle",
+      "bus",
+      "ferry",
+      "van",
+    ].includes(mode)
+  )
+    return "local";
+  return null;
+}
+
+function routeFallback(origin, destination) {
+  const from = transitText(origin, "Starting point", 200);
+  const to = transitText(destination, "Destination", 200);
+  return [
+    {
+      mode: "grab",
+      label: `${from} to ${to}`,
+      origin: from,
+      destination: to,
+      vehicle: "GrabCar",
+      duration: "Check live traffic",
+      estimatedCostPHP: "Check live app fare",
+      paymentCaveat:
+        "Confirm the fare and available cash/linked-payment methods in the Grab app before booking.",
+      signboard: "",
+      steps: [
+        {
+          title: "Set pickup and destination",
+          instruction:
+            "Use the exact pickup landmark and destination in the Grab app, then match the plate and driver before boarding.",
+          landmark: from,
+          transferTo: "",
+        },
+      ],
+      isFallback: true,
+    },
+    {
+      mode: "local",
+      label: `Local transport to ${to}`,
+      origin: from,
+      destination: to,
+      vehicle: "Local transport",
+      duration: "Confirm locally",
+      estimatedCostPHP: "Confirm local fare",
+      paymentCaveat:
+        "Carry small PHP cash. Confirm whether the specific vehicle accepts any stored-value card before boarding.",
+      signboard: "Confirm signboard locally",
+      steps: [
+        {
+          title: "Confirm the correct route",
+          instruction:
+            "Ask the dispatcher, driver, station staff, or accommodation desk which current local route serves the destination before boarding.",
+          landmark: from,
+          transferTo: to,
+        },
+      ],
+      isFallback: true,
+    },
+  ];
+}
 
 export function stripTransitBlock(text) {
   if (typeof text !== "string") return "";
   return text.replace(/```(?:transit|json:transit)[\s\S]*?```/gi, "").trim();
 }
 
-export function parseTransitLegs(
+export function parseMultiModalTransit(
   text,
   { origin = "", destination = "Destination" } = {},
 ) {
-  const result = [];
-  if (typeof text === "string" && text) {
-    const transitMatch =
-      text.match(/```(?:transit|json:transit)\s*([\s\S]*?)\s*```/i) ||
-      text.match(/```json\s*(\[\s*\{[\s\S]*?"mode"[\s\S]*?\}\s*\])\s*```/i) ||
-      text.match(/\[\s*\{[\s\S]*?"mode"[\s\S]*?"route"[\s\S]*?\}\s*\]/i);
-    if (transitMatch) {
-      try {
-        const rawJson = JSON.parse(transitMatch[1] || transitMatch[0]);
-        if (Array.isArray(rawJson)) {
-          for (const item of rawJson) {
-            if (item && typeof item === "object") {
-              const rawMode = String(item.mode || "").trim();
-              const matchedMode =
-                TRANSIT_MODES.find(
-                  (m) => m.toLowerCase() === rawMode.toLowerCase(),
-                ) ||
-                rawMode ||
-                "Jeepney";
-              result.push({
-                mode: matchedMode,
-                route:
-                  textValue(item.route, "Route", 300, true) ||
-                  `${origin || "Base"} to ${destination}`,
-                estimatedFarePHP:
-                  textValue(item.estimatedFarePHP, "Estimated fare", 100, true) ||
-                  "₱50 - ₱150",
-                paymentMethod:
-                  textValue(item.paymentMethod, "Payment method", 100, true) ||
-                  "Cash only",
-                localTip:
-                  textValue(item.localTip, "Local tip", 500, true) ||
-                  "Confirm fare before boarding.",
-              });
-            }
-          }
-        }
-      } catch {}
-    }
-  }
+  if (typeof text !== "string" || !text.trim())
+    return routeFallback(origin, destination);
 
-  if (!result.length) {
-    const dest = (destination || "Local Area").trim();
-    const orig = (origin || "Arrival Hub").trim();
-    result.push(
-      {
-        mode: "Grab",
-        route: `${orig} to ${dest} City Center`,
-        estimatedFarePHP: "₱250 - ₱450",
-        paymentMethod: "GCash / GrabPay / Cash",
-        localTip:
-          "Best for fixed fares, airport pickups, and air-conditioned travel.",
-      },
-      {
-        mode: "Jeepney",
-        route: `${dest} Main Highway & Landmark Loop`,
-        estimatedFarePHP: "₱15 - ₱30",
-        paymentMethod: "Cash only (exact change preferred)",
-        localTip:
-          "Pass your fare forward saying 'Bayad po' and tap the ceiling or say 'Para po' to alight.",
-      },
-      {
-        mode: "Tricycle",
-        route: `${dest} Local Town Center / Beach Access`,
-        estimatedFarePHP: "₱50 - ₱150",
-        paymentMethod: "Cash only",
-        localTip:
-          "Negotiate special trip vs regular route fare before getting in.",
-      },
+  const match =
+    text.match(/```(?:transit|json:transit)\s*([\s\S]*?)\s*```/i) ||
+    text.match(
+      /```json\s*(\[\s*\{[\s\S]*?"mode"[\s\S]*?\}\s*\])\s*```/i,
     );
+  if (!match) return routeFallback(origin, destination);
+
+  try {
+    const raw = JSON.parse(match[1] || match[0]);
+    if (!Array.isArray(raw)) return routeFallback(origin, destination);
+
+    const routes = [];
+    for (const item of raw.slice(0, 6)) {
+      if (!item || typeof item !== "object") continue;
+      const mode = normalizeTransitMode(item.mode);
+      if (!mode) continue;
+
+      const legacyRoute = transitText(item.route, "", 300);
+      let routeOrigin = transitText(item.origin, "", 200);
+      let routeDestination = transitText(item.destination, "", 200);
+      if ((!routeOrigin || !routeDestination) && legacyRoute) {
+        const pieces = legacyRoute.split(/\s+to\s+/i);
+        if (!routeOrigin) routeOrigin = transitText(pieces[0], origin || "Starting point", 200);
+        if (!routeDestination)
+          routeDestination = transitText(
+            pieces.slice(1).join(" to "),
+            destination,
+            200,
+          );
+      }
+      routeOrigin = routeOrigin || transitText(origin, "Starting point", 200);
+      routeDestination =
+        routeDestination || transitText(destination, "Destination", 200);
+
+      const rawVehicle = transitText(
+        item.vehicle,
+        transitText(item.mode, TRANSIT_MODE_LABELS[mode], 80),
+        100,
+      );
+      const legacyPayment = transitText(item.paymentMethod, "", 180);
+      const paymentCaveat = transitText(
+        item.paymentCaveat,
+        legacyPayment ||
+          (mode === "train"
+            ? "Confirm whether this station/line uses Beep or another accepted payment method before travel."
+            : mode === "local"
+              ? "Carry small PHP cash and confirm the fare before boarding."
+              : "Confirm the fare and payment method in the Grab app before booking."),
+        300,
+      );
+      const isJeepOrUv = /jeep|uv/i.test(rawVehicle);
+      const signboard =
+        mode === "local" && isJeepOrUv
+          ? transitText(item.signboard, "Confirm signboard locally", 160)
+          : transitText(item.signboard, "", 160);
+
+      const steps = [];
+      if (Array.isArray(item.steps)) {
+        for (const [index, step] of item.steps.slice(0, 12).entries()) {
+          if (!step || typeof step !== "object") continue;
+          const instruction = transitText(step.instruction, "", 500);
+          if (!instruction) continue;
+          steps.push({
+            title: transitText(step.title, `Step ${index + 1}`, 120),
+            instruction,
+            landmark: transitText(step.landmark, "", 180),
+            transferTo: transitText(step.transferTo, "", 180),
+          });
+        }
+      }
+      if (!steps.length) {
+        steps.push({
+          title: "Follow this route",
+          instruction: transitText(
+            item.localTip,
+            `Travel from ${routeOrigin} to ${routeDestination} and confirm the current boarding point before departure.`,
+            500,
+          ),
+          landmark: legacyRoute || routeOrigin,
+          transferTo: "",
+        });
+      }
+
+      routes.push({
+        mode,
+        label: transitText(
+          item.label,
+          legacyRoute || `${routeOrigin} to ${routeDestination}`,
+          180,
+        ),
+        origin: routeOrigin,
+        destination: routeDestination,
+        vehicle: rawVehicle,
+        duration: transitText(item.duration, "Check current travel time", 100),
+        estimatedCostPHP: transitText(
+          item.estimatedCostPHP || item.estimatedFarePHP,
+          "Confirm current fare",
+          100,
+        ),
+        paymentCaveat,
+        signboard,
+        steps,
+        isFallback: false,
+      });
+    }
+
+    return routes.length ? routes : routeFallback(origin, destination);
+  } catch {
+    return routeFallback(origin, destination);
   }
-  return result;
+}
+
+// Backward-compatible flat adapter for saved plans and older consumers.
+export function parseTransitLegs(text, options = {}) {
+  return parseMultiModalTransit(text, options).map((route) => ({
+    mode:
+      route.vehicle && route.vehicle !== "Local transport"
+        ? route.vehicle
+        : TRANSIT_MODE_LABELS[route.mode],
+    route: `${route.origin} to ${route.destination}`,
+    estimatedFarePHP: route.estimatedCostPHP,
+    paymentMethod: route.paymentCaveat,
+    localTip: route.steps.map((step) => step.instruction).join(" "),
+    signboard: route.signboard,
+    duration: route.duration,
+    modeId: route.mode,
+  }));
+}
+
+export function buildGoogleMapsDirectionsUrl(
+  origin,
+  destination,
+  { mode = "transit" } = {},
+) {
+  const from = transitText(origin, "", 200);
+  const to = transitText(destination, "", 200);
+  if (!to) return null;
+  const travelmode = mode === "grab" ? "driving" : "transit";
+  const params = new URLSearchParams({ api: "1", destination: to, travelmode });
+  if (from) params.set("origin", from);
+  return safeUrl(`https://www.google.com/maps/dir/?${params.toString()}`);
+}
+
+export function buildSakayRouteUrl(origin, destination) {
+  const from = transitText(origin, "", 200);
+  const to = transitText(destination, "", 200);
+  if (!to && !from) return null;
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return safeUrl(`https://sakay.ph/?${params.toString()}`);
+}
+
+export function buildTransitRouteLinks(route = {}) {
+  const mapsUrl = buildGoogleMapsDirectionsUrl(route.origin, route.destination, {
+    mode: route.mode,
+  });
+  const sakayUrl = buildSakayRouteUrl(route.origin, route.destination);
+  return [
+    mapsUrl && {
+      id: "maps",
+      name: "Google Maps Directions",
+      badge: "Open route",
+      url: mapsUrl,
+    },
+    sakayUrl && {
+      id: "sakay",
+      name: "Sakay.ph",
+      badge: "Public transport route search",
+      url: sakayUrl,
+    },
+  ].filter(Boolean);
 }
 
 export function buildTransitLinks(origin, destination) {
@@ -339,30 +524,21 @@ export function buildTransitLinks(origin, destination) {
   const to = (destination || "").trim();
   const target = to || from || "Philippines";
 
-  const sakayUrl =
-    from && to
-      ? `https://sakay.ph/?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-      : `https://sakay.ph/?to=${encodeURIComponent(target)}`;
-
+  const sakayUrl = buildSakayRouteUrl(from, to);
   const twelveGoUrl =
     from && to
       ? `https://12go.asia/en/travel?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
       : `https://12go.asia/en/travel?z=${encodeURIComponent(target)}`;
-
   const klookUrl = `https://www.klook.com/en-PH/search/result/?query=${encodeURIComponent(target + " transfer")}`;
   const grabUrl = "https://www.grab.com/ph/transport/";
-
-  const mapsUrl =
-    from && to
-      ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(from)}&destination=${encodeURIComponent(to)}&travelmode=transit`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target + " transit terminal")}`;
+  const mapsUrl = buildGoogleMapsDirectionsUrl(from, to, { mode: "transit" });
 
   const links = [
     {
       id: "sakay",
       name: "Sakay.ph",
       badge: "Metro Commute & Jeepneys",
-      url: safeUrl(sakayUrl),
+      url: sakayUrl,
     },
     {
       id: "grab",
@@ -386,7 +562,7 @@ export function buildTransitLinks(origin, destination) {
       id: "maps",
       name: "Google Maps Transit",
       badge: "Live Schedules & Routes",
-      url: safeUrl(mapsUrl),
+      url: mapsUrl,
     },
   ];
 
@@ -541,7 +717,7 @@ export function sanitizeSheetsPayload(payload) {
   if (typeof payload === "object") {
     const sanitized = {};
     for (const [key, val] of Object.entries(payload)) {
-sanitized[key] = sanitizeSheetsPayload(val);
+      sanitized[key] = sanitizeSheetsPayload(val);
     }
     return sanitized;
   }
