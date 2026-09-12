@@ -144,117 +144,16 @@ test("provider deep links generate valid URLs for all providers with and without
   assert.equal(buildProviderSearchUrl("unknown", withDates), null);
   assert.equal(buildProviderSearchUrl("airbnb", { destination: "" }), null);
 });
-test("parseTransitLegs parses structured transit JSON blocks and falls back gracefully", () => {
-  const markdownWithTransit = `## Day 1 Plan
-Take an early transfer to the pier.
-
-\`\`\`transit
-[
-  {
-    "mode": "Grab",
-    "route": "Mactan Airport to Cebu Pier 1",
-    "estimatedFarePHP": "₱350 - ₱500",
-    "paymentMethod": "GrabPay / GCash",
-    "localTip": "Book via GrabCar to avoid airport meter queues."
-  },
-  {
-    "mode": "Ferry",
-    "route": "Cebu Pier 1 to Tagbilaran Bohol",
-    "estimatedFarePHP": "₱800 - ₱1,200",
-    "paymentMethod": "Cash only",
-    "localTip": "OceanJet takes 2 hours; buy tickets 1 hour prior."
-  }
-]
-\`\`\`
-`;
-  const legs = parseTransitLegs(markdownWithTransit, {
-    origin: "Airport",
-    destination: "Bohol",
-  });
-  assert.equal(legs.length, 2);
-  assert.equal(legs[0].mode, "Grab");
-  assert.equal(legs[0].route, "Mactan Airport to Cebu Pier 1");
-  assert.equal(legs[0].estimatedFarePHP, "₱350 - ₱500");
-  assert.equal(legs[0].paymentMethod, "GrabPay / GCash");
-  assert.equal(legs[1].mode, "Ferry");
-
-  const clean = stripTransitBlock(markdownWithTransit);
-  assert.ok(!clean.includes("```transit"));
-  assert.ok(clean.includes("Take an early transfer to the pier."));
-
-  // Fallback when text has no transit block
-  const fallbackLegs = parseTransitLegs("Just a plain text itinerary.", {
-    origin: "Manila Airport",
-    destination: "El Nido",
-  });
-  assert.ok(fallbackLegs.length >= 3);
-  assert.equal(fallbackLegs[0].mode, "Grab");
+test("legacy transit adapter preserves endpoints without treating AI route facts as verified", () => {
+  const markdown = '```transit\n' + JSON.stringify([{ route: "Airport to Cebu Pier", mode: "Grab", estimatedFarePHP: "₱350", signboard: "FAKE SIGN" }]) + '\n```';
+  const [journey] = parseTransitLegs(markdown);
+  assert.equal(journey.origin, "Airport");
+  assert.equal(journey.destination, "Cebu Pier");
+  assert.deepEqual(journey.routes, []);
+  assert.equal(stripTransitBlock(markdown), "");
+  assert.doesNotMatch(JSON.stringify(parseTransitLegs("", { destination: "Cebu" })), /Station|Beep|₱/);
 });
-test("parseTransitLegs parses multi-modal transit schema with grab, train, local steps, and signboard", () => {
-  const multiModalMarkdown = `## Itinerary Day 1
-Commute options between hubs.
 
-\`\`\`transit
-[
-  {
-    "legTitle": "BGC to Intramuros",
-    "modes": {
-      "grab": {
-        "duration": "30-45 mins",
-        "costPHP": "₱320 - ₱420",
-        "payment": "GrabPay / CC / Cash",
-        "tip": "Request driver use NAIAX / Skyway during 4-7 PM peak traffic"
-      },
-      "train": {
-        "duration": "40-55 mins",
-        "costPHP": "₱45 - ₱65",
-        "payment": "Beep Card",
-        "steps": [
-          { "node": "Board MRT-3 at Ayala Station (Northbound)", "detail": "Tap Beep Card" },
-          { "node": "Transfer at Taft Avenue Station to LRT-1", "detail": "Follow footbridge" },
-          { "node": "Alight at Central Terminal Station", "detail": "Walk 5 mins to walled gate" }
-        ]
-      },
-      "local": {
-        "duration": "50-70 mins",
-        "costPHP": "₱25 - ₱40",
-        "payment": "Cash (Keep ₱20/₱50 bills ready)",
-        "signboard": "QUIAPO - TAFT AVE - LAWTON",
-        "steps": [
-          { "node": "Board Traditional / Modern e-Jeepney", "detail": "Hand fare forward: 'Bayad po'" },
-          { "node": "Alight at destination corner", "detail": "Call out: 'Para po'" }
-        ]
-      }
-    }
-  }
-]
-\`\`\`
-`;
-
-  const legs = parseTransitLegs(multiModalMarkdown, {
-    origin: "BGC",
-    destination: "Intramuros",
-  });
-  assert.equal(legs.length, 1);
-  assert.equal(legs[0].legTitle, "BGC to Intramuros");
-  assert.ok(legs[0].modes.grab);
-  assert.equal(legs[0].modes.grab.duration, "30-45 mins");
-  assert.equal(legs[0].modes.grab.costPHP, "₱320 - ₱420");
-  assert.equal(legs[0].modes.grab.payment, "GrabPay / CC / Cash");
-  assert.ok(legs[0].modes.grab.tip.includes("Skyway"));
-
-  assert.ok(legs[0].modes.train);
-  assert.equal(legs[0].modes.train.steps.length, 3);
-  assert.equal(legs[0].modes.train.steps[0].node, "Board MRT-3 at Ayala Station (Northbound)");
-  assert.equal(legs[0].modes.train.steps[0].detail, "Tap Beep Card");
-  assert.equal(legs[0].modes.train.steps[1].node, "Transfer at Taft Avenue Station to LRT-1");
-
-  assert.ok(legs[0].modes.local);
-  assert.equal(legs[0].modes.local.signboard, "QUIAPO - TAFT AVE - LAWTON");
-  assert.equal(legs[0].modes.local.steps.length, 2);
-  assert.equal(legs[0].modes.local.steps[0].detail, "Hand fare forward: 'Bayad po'");
-  assert.equal(legs[0].modes.local.steps[1].detail, "Call out: 'Para po'");
-});
 test("buildTransitLinks generates valid URLs for Sakay, Grab, 12Go, Klook, and Maps", () => {
   const links = buildTransitLinks("Makati", "BGC Taguig");
   assert.equal(links.length, 5);

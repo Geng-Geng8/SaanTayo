@@ -1,3 +1,4 @@
+import { planJourney } from "./routes.js";
 import {
   AppError,
   textValue,
@@ -125,7 +126,7 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
       });
     if (url.pathname === "/api/fx" && request.method === "GET")
       return json(await getRate({ fetcher: deps.fetcher }));
-    if (!["/api/travel", "/api/budget"].includes(url.pathname))
+    if (!["/api/travel", "/api/budget", "/api/journey"].includes(url.pathname))
       throw new AppError("NOT_FOUND", "Not found.", 404);
     if (request.method !== "POST")
       throw new AppError("METHOD_NOT_ALLOWED", "Use POST for research.", 405);
@@ -135,6 +136,65 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         "Open SaanTayo to start this request.",
         403,
       );
+    if (url.pathname === "/api/journey") {
+      const input = await readJson(request);
+      const from = textValue(input.origin, "Origin", 240);
+      const destination = textValue(input.destination, "Destination", 240);
+      const departure = Date.parse(input.departureTime);
+      const now = Date.now();
+      if (
+        typeof input.departureTime !== "string" ||
+        !/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(input.departureTime) ||
+        !Number.isFinite(departure) ||
+        departure < now - 60000 ||
+        departure > now + 100 * 86400000
+      )
+        throw new AppError(
+          "INVALID_INPUT",
+          "Choose a departure within the next 100 days.",
+        );
+      if (
+        !Number.isInteger(input.people) ||
+        input.people < 1 ||
+        input.people > 50
+      )
+        throw new AppError("INVALID_INPUT", "Choose 1 to 50 travellers.");
+      if (env.GOOGLE_ROUTES_API_KEY) {
+        if (!env.AI_LIMITER || !env.GLOBAL_LIMITER)
+          throw new AppError(
+            "NOT_CONFIGURED",
+            "Routing limits are not configured.",
+            503,
+          );
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        if (
+          !(await env.AI_LIMITER.limit({ key: ip })).success ||
+          !(await env.GLOBAL_LIMITER.limit({ key: "all" })).success
+        ) {
+          headers["Retry-After"] = "60";
+          throw new AppError(
+            "RATE_LIMITED",
+            "Too many requests. Try again in a minute.",
+            429,
+          );
+        }
+      }
+      const journey = await planJourney(
+        {
+          origin: from,
+          destination,
+          departureTime: new Date(Math.max(departure, now)).toISOString(),
+          people: input.people,
+        },
+        env,
+        {
+          fetcher: deps.routesFetcher,
+          signal: request.signal,
+          timeoutMs: deps.routesTimeoutMs,
+        },
+      );
+      return json({ journey });
+    }
     if (
       !env.GEMINI_API_KEY ||
       !env.CONVERSATION_SECRET ||

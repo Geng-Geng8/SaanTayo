@@ -1,11 +1,24 @@
 // Explicit local QA only. Never imported by the production Worker or static bundle.
 import { startDevelopment } from "../scripts/dev.mjs";
 import { costs, interaction, env } from "./fixtures.mjs";
+import { calibration, driving, transit } from "./journey-fixtures.mjs";
 startDevelopment({
   port: 8788,
   fixture: true,
-  override: { ...env, ALLOWED_ORIGINS: "http://127.0.0.1:8788" },
+  override: {
+    ...env,
+    ALLOWED_ORIGINS: "http://127.0.0.1:8788",
+    GOOGLE_ROUTES_API_KEY: "synthetic-preview-only",
+    GRAB_ESTIMATE_CALIBRATIONS: JSON.stringify([
+      { ...calibration, reviewedAt: new Date().toISOString() },
+    ]),
+    GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
+  },
   dependencies: {
+    routesFetcher: async (_, options) =>
+      Response.json(
+        JSON.parse(options.body).travelMode === "TRANSIT" ? transit() : driving,
+      ),
     fetcher: async (url, options) => {
       if (url.includes("frankfurter"))
         return Response.json({

@@ -19,6 +19,9 @@ export function startDevelopment({
   const counters = new Map();
   const env = {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GOOGLE_ROUTES_API_KEY: process.env.GOOGLE_ROUTES_API_KEY,
+    GRAB_ESTIMATE_CALIBRATIONS: process.env.GRAB_ESTIMATE_CALIBRATIONS,
+    GLOBAL_LIMITER: { async limit() { return { success: true }; } },
     CONVERSATION_SECRET:
       process.env.CONVERSATION_SECRET || randomBytes(32).toString("hex"),
     ALLOWED_ORIGINS: origin,
@@ -77,6 +80,8 @@ export function startDevelopment({
         "Content-Type": types[extname(path)] || "application/octet-stream",
         "Cache-Control": "no-cache",
         "X-Content-Type-Options": "nosniff",
+        // Synthetic previews must never send fixture trips to the real Sheets service.
+        ...(fixture ? { "Content-Security-Policy": "connect-src 'self'" } : {}),
       });
       const data = await readFile(path);
       res.end(
