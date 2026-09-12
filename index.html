@@ -585,12 +585,12 @@
           class="bg-slate-900 border border-slate-800 rounded-2xl p-5 prose prose-invert text-slate-200 text-sm max-w-none shadow-2xl leading-relaxed"
         ></div>
 
-        <!-- Getting Around & Local Transit Section -->
+        <!-- Transit Navigator & Wayfinder -->
         <section id="transitSection" class="panel transit-panel space-y-4">
           <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center gap-2">
               <span class="transit-icon-chip" aria-hidden="true">🧭</span>
-              <h2>Getting Around & Local Transit</h2>
+              <h2>Transit Navigator & Wayfinder</h2>
             </div>
             <span
               class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-lime-500/20 text-lime-300 border border-lime-500/40 uppercase tracking-wide"
@@ -598,20 +598,48 @@
             >
           </div>
           <p class="muted">
-            Practical routes, payment methods (Cash/GCash/Beep), and realistic fare expectations for this trip.
+            Switch modes to compare the practical route, payment method, fare estimate, transfer sequence, and physical signboard cues.
           </p>
-          <!-- Transit Cards Grid -->
-          <div
-            id="transitCardsGrid"
-            class="grid grid-cols-1 md:grid-cols-2 gap-3"
-          ></div>
-          <!-- Transit Quick-Link Action Bar -->
-          <div class="pt-2 border-t border-slate-800 space-y-2">
-            <span
-              class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider"
-              >Commute & Booking Quick-Launch</span
+          <div id="transitNavigator" class="transit-navigator">
+            <div
+              class="transit-mode-tabs"
+              role="tablist"
+              aria-label="Transit mode"
             >
-            <div id="transitLinksRow" class="flex flex-wrap gap-2"></div>
+              <button
+                type="button"
+                role="tab"
+                data-transit-mode="grab"
+                aria-selected="true"
+                class="transit-mode-tab transit-mode-tab-grab"
+              >
+                🚗 Grab
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-transit-mode="train"
+                aria-selected="false"
+                class="transit-mode-tab transit-mode-tab-train"
+              >
+                🚊 Train/MRT
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-transit-mode="local"
+                aria-selected="false"
+                class="transit-mode-tab transit-mode-tab-local"
+              >
+                🚐 Jeepney/Local
+              </button>
+            </div>
+            <div
+              id="transitRoutePanel"
+              class="transit-route-panel"
+              role="tabpanel"
+              aria-live="polite"
+            ></div>
           </div>
         </section>
 
