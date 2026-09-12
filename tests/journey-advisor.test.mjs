@@ -62,12 +62,15 @@ const source = {
   url: "https://www.google.com/maps/place/Fort+Santiago/",
 };
 
-test("grounded advice requires evidence and keeps estimates as ranges", () => {
-  const advice = normalizeJourneyAdvice(rawAdvice, {
+const normalizedAdvice = () =>
+  normalizeJourneyAdvice(rawAdvice, {
     sources: [source],
     mapsUsed: true,
     searchUsed: true,
   });
+
+test("grounded advice requires evidence and keeps estimates as ranges", () => {
+  const advice = normalizedAdvice();
   assert.equal(advice.status, "grounded");
   assert.equal(advice.options.length, 2);
   assert.deepEqual(
@@ -151,11 +154,7 @@ test("journey endpoint invokes advisor when structured routing has no useful rou
     {
       journeyAdvisor: async () => {
         calls++;
-        return normalizeJourneyAdvice(rawAdvice, {
-          sources: [source],
-          mapsUsed: true,
-          searchUsed: true,
-        });
+        return normalizedAdvice();
       },
     },
   );
@@ -166,13 +165,53 @@ test("journey endpoint invokes advisor when structured routing has no useful rou
   assert.equal(data.advisor.status, "grounded");
 });
 
+test("grounded place resolution gets one bounded retry for a verified route", async () => {
+  const q = {
+    origin: "national museum",
+    destination: "Fort Santiago, Intramuros, Manila",
+    departureTime: new Date(Date.now() + 60000).toISOString(),
+    people: 2,
+  };
+  const planned = [];
+  const response = await handleRequest(
+    apiRequest("journey", q),
+    {
+      ...env,
+      GOOGLE_ROUTES_API_KEY: "routes-key",
+      GEMINI_API_KEY: "gemini-key",
+      ENABLE_GROUNDING: "true",
+      GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
+      AI_LIMITER: { limit: async () => ({ success: true }) },
+    },
+    {},
+    {
+      planJourney: async (query) => {
+        planned.push(query);
+        return planned.length === 1
+          ? { ...query, status: "unavailable", routes: [], warnings: [] }
+          : {
+              ...query,
+              status: "ok",
+              routes: [{ mode: "local", label: "Verified local route" }],
+              warnings: [],
+            };
+      },
+      journeyAdvisor: async () => normalizedAdvice(),
+    },
+  );
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(planned.length, 2);
+  assert.equal(planned[1].origin, "National Museum of Fine Arts, Manila");
+  assert.equal(data.journey.status, "ok");
+  assert.equal(data.advisor, undefined);
+  assert.match(data.journey.warnings[0], /Matched your places/);
+});
+
 test("grounded advisor replaces the dead-end UI and clarification can retry in app", () => {
   const dom = new JSDOM("<main></main>", { url: "https://app.example" });
   global.document = dom.window.document;
-  const advice = normalizeJourneyAdvice(rawAdvice, {
-    sources: [source],
-    mapsUsed: true,
-  });
+  const advice = normalizedAdvice();
   const root = renderJourney(
     {
       origin: "national museum",
@@ -187,9 +226,9 @@ test("grounded advisor replaces the dead-end UI and clarification can retry in a
   );
   assert.match(root.textContent, /Grounded estimate/i);
   assert.match(root.textContent, /15–30 min/);
-  assert.match(root.textContent, /₱120/);
+  assert.match(root.textContent, /₱120–₱220/);
   assert.doesNotMatch(root.textContent, /No verified route available/);
-  assert.equal(root.querySelectorAll(".journey-source-link").length, 2);
+  assert.equal(root.querySelectorAll(".journey-source-link").length, 1);
   assert.equal(root.querySelectorAll("script,img,[onerror]").length, 0);
 
   let refined;
