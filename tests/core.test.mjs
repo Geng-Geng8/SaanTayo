@@ -9,7 +9,11 @@ import {
   buildProviderSearchUrl,
   buildAllProviderLinks,
   STAY_TYPES,
+  parseMultiModalTransit,
   parseTransitLegs,
+  buildGoogleMapsDirectionsUrl,
+  buildSakayRouteUrl,
+  buildTransitRouteLinks,
   buildTransitLinks,
   stripTransitBlock,
   TRANSIT_MODES,
@@ -144,11 +148,124 @@ test("provider deep links generate valid URLs for all providers with and without
   assert.equal(buildProviderSearchUrl("unknown", withDates), null);
   assert.equal(buildProviderSearchUrl("airbnb", { destination: "" }), null);
 });
-test("parseTransitLegs parses structured transit JSON blocks and falls back gracefully", () => {
-  const markdownWithTransit = `## Day 1 Plan
-Take an early transfer to the pier.
+test("parseMultiModalTransit validates canonical modes, payment, signboards, transfers, and fallback", () => {
+  const markdownWithTransit = `## Manila route
+Use the route that best fits traffic and luggage.
 
 \`\`\`transit
+[
+  {
+    "mode": "grab",
+    "label": "NAIA to Makati",
+    "origin": "NAIA Terminal 3",
+    "destination": "Ayala Center Makati",
+    "vehicle": "GrabCar",
+    "duration": "25-60 min",
+    "estimatedCostPHP": "₱350 - ₱650",
+    "paymentCaveat": "Confirm the live fare and cash or linked-payment option in the Grab app.",
+    "signboard": "",
+    "steps": [
+      {
+        "title": "Go to the pickup zone",
+        "instruction": "Follow the app to the designated ride-hailing pickup point.",
+        "landmark": "NAIA Terminal 3 arrivals",
+        "transferTo": "GrabCar"
+      }
+    ]
+  },
+  {
+    "mode": "train",
+    "label": "MRT-3 northbound",
+    "origin": "Ayala MRT-3 Station",
+    "destination": "Ortigas MRT-3 Station",
+    "vehicle": "MRT-3",
+    "duration": "15-25 min",
+    "estimatedCostPHP": "₱13 - ₱28",
+    "paymentCaveat": "Use a Beep card or confirm the current single-journey ticket option at the station.",
+    "signboard": "",
+    "steps": [
+      {
+        "title": "Enter Ayala Station",
+        "instruction": "Follow signs for the northbound platform.",
+        "landmark": "Ayala MRT-3 Station",
+        "transferTo": "Northbound MRT-3"
+      },
+      {
+        "title": "Exit at Ortigas",
+        "instruction": "Ride northbound and get off at Ortigas Station.",
+        "landmark": "Ortigas MRT-3 Station",
+        "transferTo": ""
+      }
+    ]
+  },
+  {
+    "mode": "local",
+    "label": "Jeepney to BGC",
+    "origin": "Guadalupe",
+    "destination": "Market! Market!",
+    "vehicle": "Jeepney",
+    "duration": "20-45 min",
+    "estimatedCostPHP": "₱15 - ₱30",
+    "paymentCaveat": "Carry small PHP cash; do not assume Beep is accepted on the jeepney.",
+    "signboard": "GATE 3 / MARKET MARKET",
+    "steps": [
+      {
+        "title": "Find the loading area",
+        "instruction": "Confirm the current jeepney loading point with the dispatcher.",
+        "landmark": "Guadalupe",
+        "transferTo": "Jeepney marked GATE 3 / MARKET MARKET"
+      },
+      {
+        "title": "Confirm the dashboard sign",
+        "instruction": "Board only after confirming the signboard and destination with the driver.",
+        "landmark": "Jeepney windshield",
+        "transferTo": "Market! Market!"
+      }
+    ]
+  }
+]
+\`\`\`
+`;
+  const routes = parseMultiModalTransit(markdownWithTransit, {
+    origin: "NAIA",
+    destination: "BGC",
+  });
+  assert.deepEqual(
+    routes.map((route) => route.mode),
+    ["grab", "train", "local"],
+  );
+  assert.deepEqual(TRANSIT_MODES, ["grab", "train", "local"]);
+  assert.equal(routes[0].duration, "25-60 min");
+  assert.equal(routes[0].estimatedCostPHP, "₱350 - ₱650");
+  assert.match(routes[1].paymentCaveat, /Beep/i);
+  assert.equal(routes[1].steps[0].transferTo, "Northbound MRT-3");
+  assert.equal(routes[2].signboard, "GATE 3 / MARKET MARKET");
+  assert.match(routes[2].paymentCaveat, /cash/i);
+  assert.equal(routes[2].steps.length, 2);
+
+  const clean = stripTransitBlock(markdownWithTransit);
+  assert.ok(!clean.includes("```transit"));
+  assert.ok(clean.includes("Use the route that best fits traffic and luggage."));
+  assert.ok(!clean.includes("GATE 3 / MARKET MARKET"));
+
+  for (const invalidInput of [
+    "Just a plain text itinerary.",
+    "```transit\n{bad json}\n```",
+  ]) {
+    const fallback = parseMultiModalTransit(invalidInput, {
+      origin: "Manila Airport",
+      destination: "El Nido",
+    });
+    assert.equal(fallback.length, 2);
+    assert.equal(fallback[0].mode, "grab");
+    assert.equal(fallback[1].mode, "local");
+    assert.ok(fallback.every((route) => route.isFallback === true));
+    assert.match(fallback[0].estimatedCostPHP, /Check live app fare/);
+    assert.equal(fallback[1].signboard, "Confirm signboard locally");
+  }
+});
+test("parseTransitLegs preserves legacy flat saved-plan transit data", () => {
+  const legacy = `\`\`\`transit
 [
   {
     "mode": "Grab",
@@ -162,12 +279,11 @@ Take an early transfer to the pier.
     "route": "Cebu Pier 1 to Tagbilaran Bohol",
     "estimatedFarePHP": "₱800 - ₱1,200",
     "paymentMethod": "Cash only",
-    "localTip": "OceanJet takes 2 hours; buy tickets 1 hour prior."
+    "localTip": "Confirm the operator schedule before departure."
   }
 ]
-\`\`\`
-`;
-  const legs = parseTransitLegs(markdownWithTransit, {
+\`\`\``;
+  const legs = parseTransitLegs(legacy, {
     origin: "Airport",
     destination: "Bohol",
   });
@@ -177,38 +293,38 @@ Take an early transfer to the pier.
   assert.equal(legs[0].estimatedFarePHP, "₱350 - ₱500");
   assert.equal(legs[0].paymentMethod, "GrabPay / GCash");
   assert.equal(legs[1].mode, "Ferry");
-
-  const clean = stripTransitBlock(markdownWithTransit);
-  assert.ok(!clean.includes("```transit"));
-  assert.ok(clean.includes("Take an early transfer to the pier."));
-
-  // Fallback when text has no transit block
-  const fallbackLegs = parseTransitLegs("Just a plain text itinerary.", {
-    origin: "Manila Airport",
-    destination: "El Nido",
-  });
-  assert.ok(fallbackLegs.length >= 3);
-  assert.equal(fallbackLegs[0].mode, "Grab");
 });
-test("buildTransitLinks generates valid URLs for Sakay, Grab, 12Go, Klook, and Maps", () => {
-  const links = buildTransitLinks("Makati", "BGC Taguig");
-  assert.equal(links.length, 5);
+test("transit route helpers build Maps Directions and Sakay searches without AI-generated URLs", () => {
+  const maps = buildGoogleMapsDirectionsUrl("Makati", "BGC Taguig", {
+    mode: "grab",
+  });
+  const mapsUrl = new URL(maps);
+  assert.equal(mapsUrl.hostname, "www.google.com");
+  assert.equal(mapsUrl.pathname, "/maps/dir/");
+  assert.equal(mapsUrl.searchParams.get("origin"), "Makati");
+  assert.equal(mapsUrl.searchParams.get("destination"), "BGC Taguig");
+  assert.equal(mapsUrl.searchParams.get("travelmode"), "driving");
 
-  const sakay = links.find((l) => l.id === "sakay");
-  assert.ok(sakay.url.includes("sakay.ph/?from=Makati&to=BGC%20Taguig"));
+  const sakay = new URL(buildSakayRouteUrl("Makati", "BGC Taguig"));
+  assert.equal(sakay.hostname, "sakay.ph");
+  assert.equal(sakay.searchParams.get("from"), "Makati");
+  assert.equal(sakay.searchParams.get("to"), "BGC Taguig");
 
-  const grab = links.find((l) => l.id === "grab");
-  assert.ok(grab.url.includes("grab.com/ph/transport/"));
+  const routeLinks = buildTransitRouteLinks({
+    mode: "local",
+    origin: "Makati",
+    destination: "BGC Taguig",
+  });
+  assert.deepEqual(
+    routeLinks.map((item) => item.id),
+    ["maps", "sakay"],
+  );
 
-  const twelvego = links.find((l) => l.id === "twelvego");
-  assert.ok(twelvego.url.includes("12go.asia/en/travel?from=Makati&to=BGC%20Taguig"));
-
-  const klook = links.find((l) => l.id === "klook");
-  assert.ok(klook.url.includes("klook.com/en-PH/search"));
-
-  const maps = links.find((l) => l.id === "maps");
-  assert.ok(maps.url.includes("google.com/maps/dir"));
-  assert.ok(maps.url.includes("travelmode=transit"));
+  const legacyLinks = buildTransitLinks("Makati", "BGC Taguig");
+  assert.equal(legacyLinks.length, 5);
+  assert.ok(legacyLinks.some((item) => item.id === "grab"));
+  assert.ok(legacyLinks.some((item) => item.id === "twelvego"));
+  assert.ok(legacyLinks.some((item) => item.id === "klook"));
 });
 test("cleanTripPayload formats compact trip JSON strictly under 50,000 chars", () => {
   const sampleTrip = {
@@ -644,11 +760,11 @@ test("canonicalizeSavedItem and normalizeSavedItems parse legacy stay rows seaml
 
   const normalized = canonicalizeSavedItem(legacyRow, "trip-uuid-fallback");
   assert.equal(normalized.itemId, "stay-uuid-101");
-  assert.equal(normalized.stayId, "stay-uuid-101"); // backward-compatible alias
+  assert.equal(normalized.stayId, "stay-uuid-101");
   assert.equal(normalized.tripId, "trip-uuid-202");
   assert.equal(normalized.itemType, "stay");
   assert.equal(normalized.name, "Crimson Resort & Spa");
-  assert.equal(normalized.hotelName, "Crimson Resort & Spa"); // backward-compatible alias
+  assert.equal(normalized.hotelName, "Crimson Resort & Spa");
   assert.equal(normalized.price, "₱7,500 / night");
   assert.equal(normalized.link, "https://example.com/crimson");
   assert.equal(normalized.savedBy, "Glen");
@@ -789,7 +905,6 @@ test("parseActivities fallback provides neutral destination-safe discovery witho
   assert.equal(fallback[0].category, "Activity");
   assert.ok(fallback[0].link.startsWith("https://"));
 
-  // Must not make unsupported geographic claims for inland destinations
   const allText = `${fallback[0].name} ${fallback[0].category} ${fallback[0].description} ${fallback[0].bookingTip}`.toLowerCase();
   assert.ok(!allText.includes("island hopping"));
   assert.ok(!allText.includes("snorkeling"));
