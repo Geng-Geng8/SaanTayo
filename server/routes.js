@@ -8,8 +8,14 @@ import { calibrationFor, estimateGrab } from "./grab-estimate.js";
 
 const ENDPOINT = "https://routes.googleapis.com/directions/v2:computeRoutes";
 const STEP_MASK = "routes.legs.steps.";
+const GEOCODING_MASK = ["origin", "destination"].flatMap((endpoint) =>
+  ["type", "partialMatch", "geocoderStatus.code", "placeId"].map(
+    (field) => `geocodingResults.${endpoint}.${field}`,
+  ),
+);
 export const FIELD_MASKS = Object.freeze({
   TRANSIT: [
+    ...GEOCODING_MASK,
     "routes.duration",
     "routes.distanceMeters",
     "routes.travelAdvisory.transitFare",
@@ -26,7 +32,7 @@ export const FIELD_MASKS = Object.freeze({
       "transitDetails.transitLine.agencies.name",
     ].map((x) => STEP_MASK + x),
   ].join(","),
-  DRIVE: "routes.duration,routes.distanceMeters,routes.travelAdvisory.tollInfo",
+  DRIVE: [...GEOCODING_MASK, "routes.duration", "routes.distanceMeters", "routes.travelAdvisory.tollInfo"].join(","),
 });
 const seconds = (value) =>
   typeof value === "string" && /^\d+(\.\d+)?s$/.test(value)
@@ -44,9 +50,39 @@ export function phpMoney(value) {
   return number(Number(value.units ?? 0) + nanos / 1e9);
 }
 const array = (value) => (Array.isArray(value) ? value : []);
+// Google transit duration can omit the wait before the first service. Follow
+// the returned timetable from the requested departure, including transfer waits.
+function elapsedTransitMinutes(steps, departureTime) {
+  const start = Date.parse(departureTime);
+  let cursor = start;
+  if (!Number.isFinite(start)) return null;
+  for (const step of steps) {
+    if (step.travelMode === "WALK") {
+      const minutes = seconds(step.staticDuration);
+      if (minutes === null) return null;
+      cursor += minutes * 60000;
+    } else {
+      const stops = step.transitDetails?.stopDetails;
+      const departure = Date.parse(stops?.departureTime);
+      const arrival = Date.parse(stops?.arrivalTime);
+      if (!Number.isFinite(departure) || !Number.isFinite(arrival) ||
+          departure < cursor - 1000 || arrival < departure) return null;
+      cursor = arrival;
+    }
+  }
+  return (cursor - start) / 60000;
+}
+
+function preciseEndpoint(endpoint) {
+  const types = array(endpoint?.type);
+  return !!endpoint?.placeId && !endpoint.partialMatch &&
+    !endpoint.geocoderStatus?.code && types.some((type) =>
+      ["street_address", "premise", "subpremise", "establishment", "point_of_interest", "intersection"].includes(type),
+    );
+}
+
 export function normalizeGoogleTransit(response, query) {
-  return array(response?.routes)
-    .slice(0, 3)
+  const normalized = array(response?.routes)
     .flatMap((route) => {
       const rawSteps = array(route?.legs).flatMap((leg) => array(leg?.steps));
       if (
@@ -154,7 +190,7 @@ export function normalizeGoogleTransit(response, query) {
           mode: rail ? "train" : "local",
           label: [...new Set(names)].join(" + ") || "Public transit",
           source: "google_routes",
-          durationMinutes: seconds(route.duration),
+          durationMinutes: elapsedTransitMinutes(rawSteps, query.departureTime),
           distanceMeters: number(route.distanceMeters),
           totalCostPHP: fare,
           costSource: fare === null ? "unknown" : "google_transit",
@@ -169,11 +205,30 @@ export function normalizeGoogleTransit(response, query) {
           ],
           warnings: [
             "Schedules and service may change. Confirm payment with the operator.",
+            ...(elapsedTransitMinutes(rawSteps, query.departureTime) === null
+              ? ["Complete, catchable schedule timing is unavailable. Total time needs confirmation."] : []),
           ],
           steps,
         },
       ];
     });
+  // Repeated departures of the same itinerary must not hide a bus alternative.
+  const seen = new Set();
+  const distinct = normalized
+    .sort((a, b) => (a.durationMinutes ?? Infinity) - (b.durationMinutes ?? Infinity))
+    .filter((route) => {
+      const key = JSON.stringify([route.mode, route.totalCostPHP, route.steps.map(
+        ({ type, title, stopName, lineName, headsign, distanceMeters, instruction }) =>
+          [type, title, stopName, lineName, headsign, distanceMeters, instruction],
+      )]);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  const selected = ["train", "local"].map((mode) => distinct.find((r) => r.mode === mode)).filter(Boolean);
+  for (const route of distinct)
+    if (selected.length < 5 && !selected.includes(route)) selected.push(route);
+  return distinct.filter((route) => selected.includes(route));
 }
 export function normalizeGoogleDriving(response, query, calibration, now) {
   return array(response?.routes)
@@ -368,6 +423,15 @@ export async function planJourney(
   const results = await Promise.allSettled(
     ["TRANSIT", "DRIVE"].map((mode) => google.lookup(query, mode)),
   );
+  const resolved = results.filter((r) => r.status === "fulfilled" && array(r.value?.routes).length)
+    .map((r) => r.value.geocodingResults);
+  if (resolved.some((geo) => !preciseEndpoint(geo?.origin) || !preciseEndpoint(geo?.destination)) ||
+      new Set(resolved.map((geo) => `${geo?.origin?.placeId}|${geo?.destination?.placeId}`)).size > 1)
+    return normalizeJourney({
+      ...base,
+      status: "unavailable",
+      warnings: ["Google could not consistently resolve both endpoints to specific places. Enter an exact building, station or street address, then search again. Check the locations in Google Maps."],
+    });
   let routes = [],
     failed = 0;
   for (const [index, result] of results.entries()) {

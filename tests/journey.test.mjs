@@ -52,7 +52,7 @@ test("Google transit captures source, stops, headsign, walk, two transfers and s
   );
   assert.equal(
     route.steps.find((s) => s.type === "board").departureTime,
-    "2026-09-12T08:10:00Z",
+    "2026-09-12T08:10:00.000Z",
   );
   assert.ok(route.sourceAttribution.includes("Synthetic operator"));
 });

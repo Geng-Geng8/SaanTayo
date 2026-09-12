@@ -76,6 +76,8 @@ export function renderTransitRoute(
   const payment = route.payment || "Confirm payment before boarding";
   card.append(el("p", `${fareLabel(route)} · ${payment}`, "journey-fare"));
   card.append(el("p", COST_SOURCES[route.costSource], "muted"));
+  if (route.costSource === "google_transit")
+    card.append(el("p", "Google did not specify ticket type or discount eligibility. Confirm the applicable fare with the operator.", "muted"));
   if (route.costBasis !== "unknown")
     card.append(
       el(

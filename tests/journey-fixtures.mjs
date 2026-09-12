@@ -23,7 +23,12 @@ export const calibration = {
   maxKm: 40,
   capacity: 4,
 };
+export const geocodingResults = {
+  origin: { placeId: "synthetic-origin", type: ["point_of_interest"] },
+  destination: { placeId: "synthetic-destination", type: ["point_of_interest"] },
+};
 export const driving = {
+  geocodingResults,
   routes: [
     {
       duration: "1800s",
@@ -36,6 +41,7 @@ export const driving = {
 };
 export function transit({ fare = true, rides = 3, rail = true } = {}) {
   return {
+    geocodingResults,
     routes: [
       {
         duration: "3300s",
@@ -67,8 +73,8 @@ export function transit({ fare = true, rides = 3, rail = true } = {}) {
                   stopDetails: {
                     departureStop: { name: `Test stop ${i}` },
                     arrivalStop: { name: `Test stop ${i + 1}` },
-                    departureTime: "2026-09-12T08:10:00Z",
-                    arrivalTime: "2026-09-12T08:20:00Z",
+                    departureTime: new Date(Date.parse("2026-09-12T08:10:00Z") + (i * 16 + (i > 1 ? 1 : 0)) * 60000).toISOString(),
+                    arrivalTime: new Date(Date.parse("2026-09-12T08:20:00Z") + (i * 16 + (i > 1 ? 1 : 0)) * 60000).toISOString(),
                   },
                   transitLine: {
                     nameShort: `Test line ${i}`,
