@@ -1,4 +1,5 @@
 import { planJourney } from "./routes.js";
+import { groundJourneyAdvice } from "./journey-advisor.js";
 import {
   AppError,
   textValue,
@@ -74,7 +75,6 @@ function corsHeaders(origin) {
 }
 function modelConfig(env) {
   const model = env.GEMINI_MODEL || MODEL;
-  // Model override is deployment-only, never from browser input.
   if (!/^gemini-[a-z0-9.-]+$/.test(model))
     throw new AppError(
       "NOT_CONFIGURED",
@@ -159,7 +159,8 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         input.people > 50
       )
         throw new AppError("INVALID_INPUT", "Choose 1 to 50 travellers.");
-      if (env.GOOGLE_ROUTES_API_KEY) {
+      const canAdvise = groundingEnabled && !!env.GEMINI_API_KEY;
+      if (env.GOOGLE_ROUTES_API_KEY || canAdvise) {
         if (!env.AI_LIMITER || !env.GLOBAL_LIMITER)
           throw new AppError(
             "NOT_CONFIGURED",
@@ -179,21 +180,73 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
           );
         }
       }
-      const journey = await planJourney(
-        {
-          origin: from,
-          destination,
-          departureTime: new Date(Math.max(departure, now)).toISOString(),
-          people: input.people,
-        },
-        env,
-        {
-          fetcher: deps.routesFetcher,
-          signal: request.signal,
-          timeoutMs: deps.routesTimeoutMs,
-        },
-      );
-      return json({ journey });
+      const journeyQuery = {
+        origin: from,
+        destination,
+        departureTime: new Date(Math.max(departure, now + 60000)).toISOString(),
+        people: input.people,
+      };
+      const plan = deps.planJourney || planJourney;
+      const routeOptions = {
+        fetcher: deps.routesFetcher,
+        signal: request.signal,
+        timeoutMs: deps.routesTimeoutMs,
+      };
+      let journey = await plan(journeyQuery, env, routeOptions);
+      let advisor = null;
+      const needsAdvisor =
+        canAdvise &&
+        (journey.routes.length === 0 ||
+          !journey.routes.some((route) => route.mode !== "grab"));
+      if (needsAdvisor) {
+        try {
+          const advise = deps.journeyAdvisor || groundJourneyAdvice;
+          advisor = await advise(journeyQuery, env, {
+            fetcher: deps.fetcher,
+            signal: request.signal,
+            timeoutMs: deps.advisorTimeoutMs,
+          });
+        } catch {
+          advisor = null;
+        }
+      }
+      // Natural-language place names are a feature, not an error. If grounded
+      // Maps/Search evidence resolves them to specific places, give Google Routes
+      // one bounded retry so the user gets a verified route without retyping.
+      if (
+        env.GOOGLE_ROUTES_API_KEY &&
+        advisor?.status === "grounded" &&
+        advisor.resolvedOrigin &&
+        advisor.resolvedDestination &&
+        (advisor.resolvedOrigin.toLowerCase() !== from.toLowerCase() ||
+          advisor.resolvedDestination.toLowerCase() !== destination.toLowerCase())
+      ) {
+        try {
+          const retryNow = Date.now();
+          const resolvedQuery = {
+            ...journeyQuery,
+            origin: advisor.resolvedOrigin,
+            destination: advisor.resolvedDestination,
+            departureTime: new Date(
+              Math.max(departure, retryNow + 60000),
+            ).toISOString(),
+          };
+          const resolved = await plan(resolvedQuery, env, routeOptions);
+          if (resolved.routes.length) {
+            journey = {
+              ...resolved,
+              warnings: [
+                `Matched your places as ${advisor.resolvedOrigin} → ${advisor.resolvedDestination} using grounded place data. The route below is verified provider data.`,
+                ...(resolved.warnings || []),
+              ],
+            };
+            advisor = null;
+          }
+        } catch {
+          // Keep the grounded advisor result; never turn a useful estimate into an error.
+        }
+      }
+      return json({ journey, ...(advisor ? { advisor } : {}) });
     }
     if (
       !env.GEMINI_API_KEY ||
@@ -232,7 +285,6 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
             env.CONVERSATION_SECRET,
           )
         : null;
-    // Platform-enforced counters survive isolate replacement (but are per Cloudflare location, not a hard spend cap).
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     if (!(await env.AI_LIMITER.limit({ key: ip })).success) {
       headers["Retry-After"] = "60";
@@ -310,7 +362,6 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
     }
     const result = normalizeInteraction(data);
     result.model = body.model;
-    // A follow-up can reuse Maps data even without a new Maps call. Preserve its restrictions.
     if (
       previous?.hasMaps ||
       (action === "chat" && input.contextHasMaps === true)
@@ -342,7 +393,6 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         { error: { code: error.code, message: error.message } },
         error.status,
       );
-    // No request bodies, credentials, raw Google responses or stack traces in logs or responses.
     return json(
       {
         error: {

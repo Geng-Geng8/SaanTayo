@@ -38,12 +38,185 @@ function schedule(value) {
       }) + " PHT"
     : "";
 }
-// PR #6's small renderer, semantic stepper and application-owned actions are
-// retained here, with canonical facts and native disclosure replacing AI fields.
+function estimateRange(min, max, suffix = "") {
+  if (min == null && max == null) return "Needs confirmation";
+  if (min == null) return `Up to ${Math.ceil(max)}${suffix}`;
+  if (max == null) return `From ${Math.ceil(min)}${suffix}`;
+  return min === max
+    ? `${Math.ceil(min)}${suffix}`
+    : `${Math.ceil(min)}–${Math.ceil(max)}${suffix}`;
+}
+function estimateCost(option) {
+  const { costMinPHP: min, costMaxPHP: max } = option;
+  if (min == null && max == null) return "Fare needs confirmation";
+  if (min == null) return `Up to ₱${Math.ceil(max)}`;
+  if (max == null) return `From ₱${Math.ceil(min)}`;
+  return min === max
+    ? `₱${Math.ceil(min)}`
+    : `₱${Math.ceil(min)}–₱${Math.ceil(max)}`;
+}
+function ensureJourneyAdvisorStyles() {
+  if (document.getElementById("journeyAdvisorStyles")) return;
+  const style = document.createElement("style");
+  style.id = "journeyAdvisorStyles";
+  style.textContent = `
+    .journey-advisor{margin-top:.85rem;padding:1rem;border:1px solid rgba(6,182,212,.38);border-radius:1.15rem;background:linear-gradient(180deg,rgba(6,182,212,.08),rgba(15,23,42,.3));box-shadow:0 12px 30px rgba(0,0,0,.22)}
+    .journey-advisor-head,.journey-advisor-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.65rem;flex-wrap:wrap}
+    .journey-advisor-kicker{font-size:.7rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#67e8f9}
+    .journey-trust-chip{display:inline-flex;align-items:center;max-width:100%;padding:.25rem .55rem;border-radius:999px;font-size:.68rem;font-weight:800;line-height:1.25}
+    .journey-trust-verified{color:#6ee7b7;background:rgba(16,185,129,.13);border:1px solid rgba(16,185,129,.35)}
+    .journey-trust-grounded{color:#7dd3fc;background:rgba(14,165,233,.13);border:1px solid rgba(14,165,233,.35)}
+    .journey-advisor-route{margin:.65rem 0 .25rem;color:#f8fafc;font-size:.92rem;font-weight:800;line-height:1.4;overflow-wrap:anywhere}
+    .journey-assumption{margin:.3rem 0;color:#fbbf24;font-size:.78rem;line-height:1.45}
+    .journey-advisor-summary{margin:.45rem 0 .8rem;color:#cbd5e1;font-size:.84rem;line-height:1.55}
+    .journey-advisor-options{display:grid;gap:.7rem}
+    .journey-advisor-card{min-width:0;padding:.9rem;border:1px solid #253349;border-radius:.9rem;background:#07101d}
+    .journey-advisor-card.recommended{border-color:rgba(6,182,212,.7);box-shadow:inset 3px 0 #06b6d4,0 8px 24px rgba(6,182,212,.08)}
+    .journey-advisor-title{margin:0;color:#f8fafc;font-size:.92rem;font-weight:850;line-height:1.35}
+    .journey-advisor-metrics{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin:.75rem 0 .35rem}
+    .journey-advisor-metrics strong{padding:.55rem .65rem;border:1px solid #26364d;border-radius:.7rem;background:#0b1626;color:#fff;font-size:.9rem;text-align:center}
+    .journey-advisor-why{margin:.55rem 0;color:#e2e8f0;font-size:.8rem;line-height:1.5}
+    .journey-advisor-directions{margin-top:.55rem}
+    .journey-advisor-steps{display:grid;gap:.55rem;margin:.65rem 0 0;padding-left:1.25rem;color:#cbd5e1;font-size:.78rem;line-height:1.5}
+    .journey-advisor-steps p{margin:.15rem 0}
+    .journey-advisor-sources{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.8rem;padding-top:.7rem;border-top:1px solid #1e293b}
+    .journey-source-label{font-size:.67rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+    .journey-source-link{display:inline-flex;padding:.3rem .5rem;border:1px solid #334155;border-radius:.55rem;color:#7dd3fc;font-size:.69rem;font-weight:700;text-decoration:none;overflow-wrap:anywhere}
+    .journey-source-link:hover{border-color:#06b6d4;color:#cffafe}
+    .journey-advisor-footnote{margin:.75rem 0 0;color:#94a3b8;font-size:.72rem;line-height:1.45}
+    .journey-refine-options{display:grid;gap:.55rem;margin-top:.7rem}
+    .journey-refine-option{width:100%;padding:.75rem .8rem;border:1px solid rgba(6,182,212,.45);border-radius:.75rem;background:rgba(6,182,212,.08);color:#e6fbff;font-weight:800;text-align:left;cursor:pointer}
+    .journey-refine-option:hover,.journey-refine-option:focus-visible{background:rgba(6,182,212,.16);outline:2px solid transparent;border-color:#22d3ee}
+    .journey-advisor-section-title{margin:1rem 0 .25rem;color:#f8fafc;font-size:.9rem}
+    .journey-unavailable-modes{margin:.7rem 0;color:#64748b;font-size:.72rem;line-height:1.5}
+    @media(min-width:720px){.journey-advisor-options{grid-template-columns:repeat(2,minmax(0,1fr))}.journey-advisor-card.recommended{grid-column:1/-1}.journey-refine-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  `;
+  document.head.append(style);
+}
+function renderAdvisorSources(sources) {
+  const wrap = el("div", null, "journey-advisor-sources");
+  if (!sources?.length) return wrap;
+  wrap.append(el("span", "Grounded sources", "journey-source-label"));
+  for (const source of sources) {
+    const a = el("a", source.title, "journey-source-link");
+    a.href = source.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    if (source.type === "maps") {
+      a.prepend(document.createTextNode("Google Maps · "));
+      a.setAttribute("translate", "no");
+    }
+    wrap.append(a);
+  }
+  return wrap;
+}
+function renderJourneyAdvisor(advisor, { onRefine } = {}) {
+  if (!advisor || !["grounded", "clarify"].includes(advisor.status)) return null;
+  ensureJourneyAdvisorStyles();
+  const section = el("section", null, "journey-advisor");
+  const top = el("div", null, "journey-advisor-head");
+  top.append(
+    el("span", "SaanTayo route intelligence", "journey-advisor-kicker"),
+    el(
+      "span",
+      advisor.status === "grounded"
+        ? `◆ Grounded estimate · ${advisor.confidence} confidence`
+        : "◆ Place clarification needed",
+      "journey-trust-chip journey-trust-grounded",
+    ),
+  );
+  section.append(top);
+  if (advisor.resolvedOrigin || advisor.resolvedDestination)
+    section.append(
+      el(
+        "p",
+        `${advisor.resolvedOrigin || "Starting point"} → ${advisor.resolvedDestination || "Destination"}`,
+        "journey-advisor-route",
+      ),
+    );
+  if (advisor.assumption)
+    section.append(el("p", `Assumption: ${advisor.assumption}`, "journey-assumption"));
+  if (advisor.summary) section.append(el("p", advisor.summary, "journey-advisor-summary"));
+
+  if (advisor.status === "clarify") {
+    section.append(el("h3", "Which place did you mean?", "journey-advisor-title"));
+    const choices = el("div", null, "journey-refine-options");
+    for (const suggestion of advisor.suggestions || []) {
+      const button = el("button", suggestion.label, "journey-refine-option");
+      button.type = "button";
+      button.addEventListener("click", () => onRefine?.(suggestion));
+      choices.append(button);
+    }
+    section.append(choices);
+    if (advisor.sources?.length) section.append(renderAdvisorSources(advisor.sources));
+    return section;
+  }
+
+  const grid = el("div", null, "journey-advisor-options");
+  const icons = { grab: "🚗", train: "🚊", local: "🚐" };
+  for (const option of advisor.options || []) {
+    const card = el("article", null, "journey-advisor-card");
+    if (option.mode === advisor.recommendedMode) card.classList.add("recommended");
+    const heading = el("div", null, "journey-advisor-card-head");
+    heading.append(
+      el("h3", `${icons[option.mode] || "•"} ${option.label}`, "journey-advisor-title"),
+      el(
+        "span",
+        option.mode === advisor.recommendedMode ? "Recommended" : `${option.confidence} confidence`,
+        "journey-trust-chip journey-trust-grounded",
+      ),
+    );
+    card.append(heading);
+    const metrics = el("div", null, "journey-advisor-metrics");
+    metrics.append(
+      el("strong", estimateRange(option.durationMin, option.durationMax, " min")),
+      el("strong", estimateCost(option)),
+    );
+    card.append(metrics);
+    if (option.costBasis !== "unknown")
+      card.append(
+        el(
+          "p",
+          option.costBasis === "vehicle" ? "Estimated per vehicle" : "Estimated per person",
+          "muted",
+        ),
+      );
+    if (option.why) card.append(el("p", option.why, "journey-advisor-why"));
+    if (option.steps?.length) {
+      const details = el("details", null, "journey-directions journey-advisor-directions");
+      details.append(el("summary", "How this would work ↓"));
+      const list = el("ol", null, "journey-advisor-steps");
+      for (const step of option.steps) {
+        const row = el("li");
+        row.append(el("strong", step.title));
+        if (step.instruction) row.append(el("p", step.instruction));
+        if (step.landmark) row.append(el("p", `Landmark: ${step.landmark}`, "muted"));
+        list.append(row);
+      }
+      details.append(list);
+      card.append(details);
+    }
+    for (const caveat of option.caveats || [])
+      card.append(el("p", caveat, "muted"));
+    grid.append(card);
+  }
+  section.append(grid);
+  section.append(renderAdvisorSources(advisor.sources));
+  section.append(
+    el(
+      "p",
+      "Grounded estimates help you decide inside SaanTayo. Confirm exact pickup points, schedules and fares before boarding or booking.",
+      "journey-advisor-footnote",
+    ),
+  );
+  return section;
+}
+
 export function renderTransitRoute(
   route,
   { onPin, isPinned = false, people = 1, recommended = false } = {},
 ) {
+  ensureJourneyAdvisorStyles();
   const card = el("article", null, "transit-card journey-route");
   card.dataset.transitRoute = route.mode;
   const header = el("div", null, "transit-card-header");
@@ -57,6 +230,7 @@ export function renderTransitRoute(
   header.append(title, pin);
   card.append(header);
   const badges = el("div", null, "journey-badges");
+  badges.append(el("span", "✓ Verified route", "journey-trust-chip journey-trust-verified"));
   for (const badge of [
     ...(recommended ? ["Recommended · fastest route"] : []),
     ...route.bestFor,
@@ -202,11 +376,12 @@ export function renderTransitRoute(
 
 export function renderJourney(
   journey,
-  { people = 1, onPin, isPinned = () => false } = {},
+  { people = 1, onPin, isPinned = () => false, advisor = null, onRefine } = {},
 ) {
   const model = recommendJourney(normalizeJourney(journey), people);
   const root = el("div", null, "journey-results");
-  for (const warning of model.warnings) root.append(el("p", warning, "muted"));
+  for (const warning of model.warnings)
+    if (model.routes.length || !advisor) root.append(el("p", warning, "muted"));
   if (model.generatedAt)
     root.append(
       el(
@@ -215,12 +390,19 @@ export function renderJourney(
         "muted",
       ),
     );
-  if (!model.routes.length) {
+  const advisorView = renderJourneyAdvisor(advisor, { onRefine });
+  if (!model.routes.length && advisorView) root.append(advisorView);
+  if (!model.routes.length && !advisorView) {
     root.append(
       el(
         "p",
-        "No verified route available. Fare needs confirmation.",
+        "SaanTayo could not build a useful route yet. Try a more specific landmark or address.",
         "journey-empty",
+      ),
+      el(
+        "p",
+        "🚗 Grab estimate unavailable · 🚊 Train / Transit unavailable · 🚐 Jeepney / Local unavailable",
+        "journey-unavailable-modes",
       ),
     );
     for (const item of buildTransitRouteLinks({ ...model, mode: "local" }))
@@ -228,96 +410,101 @@ export function renderJourney(
   }
   const comparison = comparePartyRoutes(model, people);
   if (comparison) root.append(el("p", comparison, "journey-comparison"));
-  const tabs = el("div", null, "transit-mode-tabs");
-  tabs.setAttribute("role", "tablist");
-  tabs.setAttribute("aria-label", "Transit mode");
-  const panels = el("div");
-  let selected =
-    model.routes.find((r) => r.id === model.recommendedRouteId)?.mode ||
-    model.routes[0]?.mode;
-  const buttons = [];
-  const prefix = `journey-${crypto.randomUUID()}`;
-  const select = (mode) => {
-    selected = mode;
-    for (const b of buttons) {
-      const active = b.dataset.transitMode === selected;
-      b.setAttribute("aria-selected", String(active));
-      b.tabIndex = active ? 0 : -1;
-    }
-    for (const p of panels.children) p.hidden = p.dataset.mode !== mode;
-  };
-  for (const [mode, label] of Object.entries(MODE_LABELS)) {
-    const routes = model.routes.filter((r) => r.mode === mode);
-    const button = el(
-      "button",
-      routes.length ? label : `${label} unavailable`,
-      "transit-mode-tab",
-    );
-    button.type = "button";
-    button.id = `${prefix}-tab-${mode}`;
-    button.dataset.transitMode = mode;
-    button.disabled = !routes.length;
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-controls", `${prefix}-panel-${mode}`);
-    button.addEventListener("click", () => select(mode));
-    buttons.push(button);
-    tabs.append(button);
-    const panel = el("div", null, "journey-mode-panel");
-    panel.id = `${prefix}-panel-${mode}`;
-    panel.dataset.mode = mode;
-    panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", button.id);
-    panel.tabIndex = 0;
-    for (const route of routes)
-      panel.append(
-        renderTransitRoute(route, {
-          people,
-          onPin,
-          isPinned: isPinned(route),
-          recommended: route.id === model.recommendedRouteId,
-        }),
-      );
-    panels.append(panel);
-  }
-  tabs.addEventListener("keydown", (event) => {
-    const enabled = buttons.filter((b) => !b.disabled);
-    const i = enabled.indexOf(event.target);
-    if (
-      i < 0 ||
-      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-    )
-      return;
-    event.preventDefault();
-    const next =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? enabled.length - 1
-          : (i + (event.key === "ArrowRight" ? 1 : -1) + enabled.length) %
-            enabled.length;
-    enabled[next].click();
-    enabled[next].focus();
-  });
-  // All route alternatives remain visible as compact summaries above the tabs.
-  if (model.routes.length > 1) {
-    const overview = el("div", null, "journey-overview");
-    for (const r of model.routes) {
+  if (model.routes.length) {
+    const tabs = el("div", null, "transit-mode-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Transit mode");
+    const panels = el("div");
+    let selected =
+      model.routes.find((r) => r.id === model.recommendedRouteId)?.mode ||
+      model.routes[0]?.mode;
+    const buttons = [];
+    const prefix = `journey-${crypto.randomUUID()}`;
+    const select = (mode) => {
+      selected = mode;
+      for (const b of buttons) {
+        const active = b.dataset.transitMode === selected;
+        b.setAttribute("aria-selected", String(active));
+        b.tabIndex = active ? 0 : -1;
+      }
+      for (const p of panels.children) p.hidden = p.dataset.mode !== mode;
+    };
+    for (const [mode, label] of Object.entries(MODE_LABELS)) {
+      const routes = model.routes.filter((r) => r.mode === mode);
       const button = el(
         "button",
-        `${r.id === model.recommendedRouteId ? "Recommended · " : ""}${r.label} · ${minutes(r.durationMinutes)} · ${fareLabel(r)}${r.bestFor.length ? ` · ${r.bestFor.join(" · ")}` : ""}`,
-        "journey-option",
+        routes.length ? label : `${label} unavailable`,
+        "transit-mode-tab",
       );
       button.type = "button";
-      button.addEventListener("click", () => {
-        select(r.mode);
-        document.getElementById(`${prefix}-tab-${r.mode}`)?.focus();
-      });
-      overview.append(button);
+      button.id = `${prefix}-tab-${mode}`;
+      button.dataset.transitMode = mode;
+      button.disabled = !routes.length;
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-controls", `${prefix}-panel-${mode}`);
+      button.addEventListener("click", () => select(mode));
+      buttons.push(button);
+      tabs.append(button);
+      const panel = el("div", null, "journey-mode-panel");
+      panel.id = `${prefix}-panel-${mode}`;
+      panel.dataset.mode = mode;
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", button.id);
+      panel.tabIndex = 0;
+      for (const route of routes)
+        panel.append(
+          renderTransitRoute(route, {
+            people,
+            onPin,
+            isPinned: isPinned(route),
+            recommended: route.id === model.recommendedRouteId,
+          }),
+        );
+      panels.append(panel);
     }
-    root.append(overview);
+    tabs.addEventListener("keydown", (event) => {
+      const enabled = buttons.filter((b) => !b.disabled);
+      const i = enabled.indexOf(event.target);
+      if (
+        i < 0 ||
+        !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+      )
+        return;
+      event.preventDefault();
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? enabled.length - 1
+            : (i + (event.key === "ArrowRight" ? 1 : -1) + enabled.length) %
+              enabled.length;
+      enabled[next].click();
+      enabled[next].focus();
+    });
+    if (model.routes.length > 1) {
+      const overview = el("div", null, "journey-overview");
+      for (const r of model.routes) {
+        const button = el(
+          "button",
+          `${r.id === model.recommendedRouteId ? "Recommended · " : ""}${r.label} · ${minutes(r.durationMinutes)} · ${fareLabel(r)}${r.bestFor.length ? ` · ${r.bestFor.join(" · ")}` : ""}`,
+          "journey-option",
+        );
+        button.type = "button";
+        button.addEventListener("click", () => {
+          select(r.mode);
+          document.getElementById(`${prefix}-tab-${r.mode}`)?.focus();
+        });
+        overview.append(button);
+      }
+      root.append(overview);
+    }
+    select(selected);
+    root.append(tabs, panels);
+    if (advisorView) {
+      const heading = el("h3", "Grounded alternatives", "journey-advisor-section-title");
+      root.append(heading, advisorView);
+    }
   }
-  select(selected);
-  root.append(tabs, panels);
   return root;
 }
 
@@ -339,8 +526,8 @@ export function createJourneyNavigator(
     form.append(wrapper);
     return field;
   };
-  const from = input("journeyOrigin", "From · place and city");
-  const to = input("journeyDestination", "To · place and city");
+  const from = input("journeyOrigin", "From · landmark, hotel, station or address");
+  const to = input("journeyDestination", "To · landmark, hotel, station or address");
   from.value = suggestions[0]?.origin || "";
   to.value = suggestions[0]?.destination || "";
   if (suggestions.length > 1) {
@@ -384,12 +571,12 @@ export function createJourneyNavigator(
   );
   custom.parentElement.hidden = true;
   custom.required = false;
-  const submit = el("button", "Find routes", "primary");
+  const submit = el("button", "Find the best way", "primary");
   submit.type = "submit";
   form.append(submit);
   const status = el(
     "p",
-    "Confirm the endpoints, then find current routes. Fares and service depend on available source data.",
+    "Enter a landmark, hotel, station or address. SaanTayo checks verified routes first, then grounded estimates when needed.",
     "muted",
   );
   status.setAttribute("role", "status");
@@ -399,7 +586,7 @@ export function createJourneyNavigator(
     controller = null;
     submit.disabled = false;
     results.replaceChildren();
-    status.textContent = "Journey changed. Find routes to update directions.";
+    status.textContent = "Journey changed. Find the best way to refresh guidance.";
   };
   for (const field of [from, to, custom])
     field.addEventListener("input", reset);
@@ -420,8 +607,8 @@ export function createJourneyNavigator(
     const active = new AbortController();
     controller = active;
     submit.disabled = true;
-    const timer = setTimeout(() => active.abort(), 12000);
-    status.textContent = "Checking route providers…";
+    const timer = setTimeout(() => active.abort(), 35000);
+    status.textContent = "Checking verified routes and local travel intelligence…";
     results.replaceChildren();
     try {
       const response = await lookup(
@@ -434,17 +621,32 @@ export function createJourneyNavigator(
         active.signal,
       );
       if (disposed || controller !== active) return;
+      const onRefine = (suggestion) => {
+        from.value = suggestion.origin;
+        to.value = suggestion.destination;
+        reset();
+        form.requestSubmit();
+      };
       results.append(
-        renderJourney(response.journey, { people, onPin, isPinned }),
+        renderJourney(response.journey, {
+          people,
+          onPin,
+          isPinned,
+          advisor: response.advisor,
+          onRefine,
+        }),
       );
-      status.textContent =
-        response.journey?.status === "ok"
-          ? "Routes checked. Choose an option below."
-          : "Some route details need confirmation.";
+      status.textContent = response.advisor?.status === "clarify"
+        ? "Choose the place you meant below — SaanTayo will retry automatically."
+        : response.journey?.status === "ok"
+          ? "Verified routes found. Choose an option below."
+          : response.advisor?.status === "grounded"
+            ? "Grounded route estimates found. Review the assumptions and choose an option."
+            : "Some route details still need confirmation.";
     } catch (error) {
       if (!disposed && controller === active)
         status.textContent = active.signal.aborted
-          ? "Routing timed out. Try again or check Maps."
+          ? "This lookup took too long. Try again with a more specific landmark or address."
           : error.message || "Routing unavailable. Try again later.";
     } finally {
       clearTimeout(timer);
