@@ -560,6 +560,16 @@
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <button
+              id="openGoModeBtn"
+              type="button"
+              data-dialog="goModeModal"
+              aria-label="Open Go Mode on-the-ground trip execution"
+              class="px-2.5 py-1 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span aria-hidden="true">▶</span>
+              <span>Go Mode</span>
+            </button>
+            <button
               id="savePlan"
               aria-label="Save plan"
               class="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-lg flex items-center gap-1"
@@ -592,10 +602,22 @@
               <span class="transit-icon-chip" aria-hidden="true">🧭</span>
               <h2>Transit Navigator & Wayfinder</h2>
             </div>
-            <span
-              class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wide"
-              >PH Multi-Modal Commute</span
-            >
+            <div class="flex items-center gap-2">
+              <button
+                id="openTransitGoModeBtn"
+                type="button"
+                data-dialog="goModeModal"
+                aria-label="Launch Go Mode for this trip"
+                class="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span aria-hidden="true">▶</span>
+                <span>Go Mode</span>
+              </button>
+              <span
+                class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wide"
+                >PH Multi-Modal Commute</span
+              >
+            </div>
           </div>
           <p class="muted">Compare sourced routes, travel time and fares. Confirm your starting point and destination before searching.</p>
           <div id="transitCardsGrid" class="journey-navigator"></div>
@@ -1053,6 +1075,76 @@
         These links need internet. Checklist reminders remain available offline.
       </p>
       <button data-close class="secondary">Close</button>
+    </dialog>
+    <dialog id="goModeModal" aria-labelledby="goModeTitle" class="go-mode-drawer shortlist-drawer">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="text-base text-cyan-400" aria-hidden="true">▶</span>
+          <div>
+            <h2 id="goModeTitle" class="font-bold text-sm text-cyan-300">Go Mode</h2>
+            <p class="text-[10px] text-slate-400 font-medium">On-the-ground trip execution</p>
+          </div>
+        </div>
+        <button id="closeGoModeBtn" data-close aria-label="Close Go Mode" class="secondary text-xs">✕</button>
+      </div>
+
+      <div id="goModeArrivalBanner" class="hidden p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold my-2">
+        <span aria-hidden="true">✓ </span>
+        <span id="goModeArrivalText">You’re at your destination. Where to next?</span>
+      </div>
+
+      <form id="goModeForm" class="space-y-3 my-3">
+        <!-- Where are you now? -->
+        <div class="space-y-1.5">
+          <label for="goModeOrigin" class="text-xs font-bold text-slate-200">Where are you now?</label>
+          <input
+            type="text"
+            id="goModeOrigin"
+            required
+            maxlength="240"
+            placeholder="Enter landmark, hotel, station, or street"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+          />
+          <div id="goModeOriginChips" class="flex flex-wrap gap-1 pt-1" aria-label="Quick current place choices"></div>
+        </div>
+
+        <!-- Where to next? -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label for="goModeDestination" class="text-xs font-bold text-slate-200">Where to next?</label>
+            <label for="goModeDestinationQuickSelect" class="sr-only">Choose saved place</label>
+            <select id="goModeDestinationQuickSelect" aria-label="Choose saved destination" class="text-[11px] bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-cyan-300 focus:outline-none focus:border-cyan-500 max-w-[180px] truncate">
+              <option value="">Choose saved place…</option>
+            </select>
+          </div>
+          <input
+            type="text"
+            id="goModeDestination"
+            required
+            maxlength="240"
+            placeholder="Choose saved place above or type destination"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+
+        <!-- Action Button -->
+        <button
+          type="submit"
+          id="goModeFindWayBtn"
+          class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+        >
+          <span aria-hidden="true">▶</span>
+          <span>Find the smartest way</span>
+        </button>
+      </form>
+
+      <div id="goModeStatus" role="status" aria-live="polite" class="text-xs text-slate-400 my-2"></div>
+      <div id="goModeResults" class="space-y-3 my-3"></div>
+
+      <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">SaanTayo chooses the best way · Google Maps navigates</span>
+        <button data-close class="secondary text-xs py-1.5 px-3">Done</button>
+      </div>
     </dialog>
     <noscript
       ><p class="notice">
