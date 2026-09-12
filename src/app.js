@@ -5,8 +5,8 @@ import {
   calculateBudget,
   safeUrl,
   buildAllProviderLinks,
-  parseTransitLegs,
-  buildTransitLinks,
+  parseMultiModalTransit,
+  buildTransitRouteLinks,
   SHEETS_API_URL,
   cleanTripPayload,
   fetchSheetsApi,
@@ -42,8 +42,7 @@ import {
   renderProviderCard,
   renderShortlistItem,
   renderSharedTripRow,
-  renderTransitCard,
-  renderTransitLinkButton,
+  renderTransitRoute,
   renderDiningCard,
   renderActivityCard,
   renderStayCard,
@@ -55,7 +54,7 @@ const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
-  activeTransitFilter = "all",
+  activeTransitMode = "grab",
   activePartnerFilter = "all",
   sharedTrips = [],
   hasSharedSnapshot = false,
@@ -366,64 +365,48 @@ function currency(value) {
 }
 function renderTransit() {
   if (!current?.trip) return;
-  const rawText = planText();
-  const legs = parseTransitLegs(rawText, {
+  const routes = parseMultiModalTransit(planText(), {
     origin: current.trip.origin || "Arrival Base",
     destination: current.trip.destination,
   });
-
-  // Synchronize top filter buttons
-  document.querySelectorAll("[data-transit-filter]").forEach((b) => {
-    const isSelected = b.dataset.transitFilter === activeTransitFilter;
-    b.setAttribute("aria-selected", isSelected ? "true" : "false");
-    b.className = `transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${
-      isSelected
-        ? "bg-cyan-500 text-slate-950 font-bold"
-        : "text-slate-400 hover:text-white bg-slate-900 border border-slate-800"
-    }`;
-  });
-
-  const filteredLegs =
-    activeTransitFilter === "all"
-      ? legs
-      : legs.filter((leg) => {
-          if (leg.modes && typeof leg.modes === "object") {
-            return Boolean(leg.modes[activeTransitFilter]);
-          }
-          return (leg.mode || "")
-            .toLowerCase()
-            .includes(activeTransitFilter.toLowerCase());
-        });
-
-  const displayLegs = filteredLegs.length ? filteredLegs : legs;
-
-  const grid = $("transitCardsGrid");
-  grid.replaceChildren();
-  for (const leg of displayLegs) {
-    const isPinned = savedItems.some(
-      (s) =>
-        s.itemType === "transport" &&
-        s.name?.toLowerCase() ===
-          (leg.legTitle || leg.route || "").toLowerCase(),
-    );
-    grid.append(
-      renderTransitCard(leg, {
-        onPin: pinTransit,
-        isPinned,
-        preferredMode: activeTransitFilter,
-      }),
-    );
+  const availableModes = [...new Set(routes.map((route) => route.mode))];
+  if (!availableModes.includes(activeTransitMode)) {
+    activeTransitMode = availableModes[0] || "grab";
   }
 
-  const links = buildTransitLinks(
-    current.trip.origin,
-    current.trip.destination,
+  for (const button of document.querySelectorAll("[data-transit-mode]")) {
+    const buttonMode = button.dataset.transitMode;
+    const available = availableModes.includes(buttonMode);
+    const selected = available && buttonMode === activeTransitMode;
+    button.disabled = !available;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+
+  const panel = $("transitRoutePanel");
+  if (!panel) return;
+  panel.replaceChildren();
+  const route =
+    routes.find((candidate) => candidate.mode === activeTransitMode) || routes[0];
+  if (!route) {
+    panel.append(
+      el(
+        "p",
+        "No practical transit route was available for this plan.",
+        "muted",
+      ),
+    );
+    return;
+  }
+
+  const routeName =
+    route.label || `${route.origin || "Origin"} → ${route.destination || "Destination"}`;
+  const isPinned = savedItems.some(
+    (item) =>
+      item.itemType === "transport" &&
+      item.name?.toLowerCase() === routeName.toLowerCase(),
   );
-  const linksRow = $("transitLinksRow");
-  linksRow.replaceChildren();
-  for (const item of links) {
-    linksRow.append(renderTransitLinkButton(item));
-  }
+  panel.append(renderTransitRoute(route, { onPin: pinTransit, isPinned }));
 }
 function renderDining() {
   if (!current?.trip) return;
@@ -982,38 +965,35 @@ async function pinActivity(activity) {
   });
 }
 
-async function pinTransit(leg, selectedModeKey) {
-  const modeKey = selectedModeKey || "grab";
-  const modeData =
-    leg.modes?.[modeKey] ||
-    leg.modes?.local ||
-    leg.modes?.train ||
-    {};
-  const modeName = modeData.modeName || leg.mode || "Transit";
+async function pinTransit(route) {
   const routeName =
-    leg.legTitle ||
-    leg.route ||
-    `${leg.origin || "Origin"} → ${leg.destination || "Destination"}`;
-  const price = modeData.costPHP || leg.estimatedFarePHP || "Check fare";
-  const links = buildTransitLinks(
-    leg.origin || current?.trip?.origin || "",
-    leg.destination || current?.trip?.destination || "",
-  );
-  const link = links[0]?.url || "";
+    route.label ||
+    route.route ||
+    `${route.origin || "Origin"} → ${route.destination || "Destination"}`;
+  const price = route.estimatedCostPHP || route.estimatedFarePHP || "Check fare";
+  const links = buildTransitRouteLinks({
+    ...route,
+    mode: route.modeId || route.mode,
+    origin: route.origin || current?.trip?.origin || "",
+    destination: route.destination || current?.trip?.destination || "",
+  });
+  const link = links.find((item) => item.id === "maps")?.url || links[0]?.url || "";
   await saveItem({
     itemType: "transport",
     name: routeName,
-    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim() || routeName,
-    category: modeName,
+    location: `${route.origin || ""} → ${route.destination || ""}`.trim(),
+    category: route.vehicle || route.mode || "Transit",
     price,
     link,
     details: {
-      mode: modeName,
-      duration: modeData.duration || "",
-      paymentMethod: modeData.payment || leg.paymentMethod || "Cash only",
-      signboard: modeData.signboard || "",
-      localTip: modeData.tip || leg.localTip || "",
-      firstStep: modeData.steps?.[0]?.node || "",
+      paymentMethod:
+        route.paymentCaveat || route.paymentMethod || "Confirm payment method",
+      localTip:
+        route.localTip ||
+        (route.steps || []).map((step) => step.instruction).join(" "),
+      duration: route.duration || "",
+      signboard: route.signboard || "",
+      steps: route.steps || [],
     },
   });
 }
@@ -1568,6 +1548,7 @@ $("planner").addEventListener("submit", (event) => {
       updatedAt: result.createdAt,
       costs: null,
     };
+    activeTransitMode = "grab";
     showCurrent();
     saveCurrentToSheets();
     toast("Plan ready. Save it for your trip.");
@@ -1696,11 +1677,15 @@ for (const button of document.querySelectorAll("[data-stay-filter]"))
     activeStayFilter = button.dataset.stayFilter;
     renderAccommodations();
   });
-for (const button of document.querySelectorAll("[data-transit-filter]"))
-  button.addEventListener("click", () => {
-    activeTransitFilter = button.dataset.transitFilter;
-    renderTransit();
-  });
+$("transitNavigator")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-transit-mode]");
+  if (!button || button.disabled) return;
+  event.preventDefault();
+  const nextMode = button.dataset.transitMode;
+  if (!nextMode || nextMode === activeTransitMode) return;
+  activeTransitMode = nextMode;
+  renderTransit();
+});
 for (const radio of document.querySelectorAll('input[name="party"]'))
   radio.addEventListener("change", () => {
     if (radio.value === "Solo Traveler") $("people").value = "1";

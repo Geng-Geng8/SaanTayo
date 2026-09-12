@@ -650,89 +650,45 @@ summary {
   color: #34d399;
 }
 
-/* Transit Navigator & Commute Advisory Styles */
+/* Legacy Transit Card Styles */
 .transit-panel {
   background: #020617;
-  border: 1px solid #1e293b;
-  border-left: 3px solid #06b6d4;
-  border-radius: 1.25rem;
+  border: 1px solid #334155;
 }
 .transit-icon-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 0.65rem;
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.3);
-  font-size: 1.1rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  font-size: 1rem;
 }
-
-/* Transit Filter Bar */
-.transit-filter-btn {
-  user-select: none;
-}
-
-/* Transit Card Container */
 .transit-card {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding: 1.15rem;
-  background: #090e17;
-  border: 1px solid #1e293b;
-  border-radius: 1rem;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45);
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: #000000;
+  border: 1px solid #334155;
+  border-radius: 0.85rem;
   transition:
     border-color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-  position: relative;
-  overflow: hidden;
-}
-.transit-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #06b6d4, #3b82f6, #10b981);
-  opacity: 0.7;
+    transform 0.2s ease;
 }
 .transit-card:hover {
-  border-color: #06b6d4;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px -4px rgba(6, 182, 212, 0.15);
+  border-color: #a3e635;
+  transform: translateY(-1px);
 }
-
 .transit-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-}
-.transit-title-wrap {
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-  flex: 1;
-  min-width: 0;
 }
-.transit-leg-icon {
-  font-size: 1.1rem;
-  flex-shrink: 0;
-}
-.transit-leg-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #f8fafc;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-}
-
-/* Badges & Chips */
 .transit-mode-badge {
   font-size: 0.7rem;
   font-weight: 800;
@@ -745,19 +701,15 @@ summary {
   gap: 0.35rem;
 }
 .mode-grab {
-  background: rgba(16, 185, 129, 0.18);
-  color: #34d399;
-  border: 1px solid rgba(52, 211, 153, 0.4);
-}
-.mode-jeepney {
   background: rgba(245, 158, 11, 0.18);
   color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  border: 1px solid rgba(245, 158, 11, 0.45);
 }
-.mode-train {
-  background: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
-  border: 1px solid rgba(165, 180, 252, 0.4);
+.mode-jeepney,
+.mode-local {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
 }
 .mode-tricycle {
   background: rgba(245, 158, 11, 0.18);
@@ -770,250 +722,67 @@ summary {
   border: 1px solid rgba(56, 189, 248, 0.4);
 }
 .mode-bus {
-  background: rgba(14, 165, 233, 0.18);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  background: rgba(99, 102, 241, 0.18);
+  color: #818cf8;
+  border: 1px solid rgba(129, 140, 248, 0.4);
+}
+.mode-train {
+  background: rgba(6, 182, 212, 0.18);
+  color: #67e8f9;
+  border: 1px solid rgba(6, 182, 212, 0.45);
 }
 .mode-default {
   background: rgba(148, 163, 184, 0.18);
   color: #cbd5e1;
   border: 1px solid rgba(203, 213, 225, 0.4);
 }
-
 .transit-fare-chip {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 800;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  padding: 0.2rem 0.55rem;
+  color: #a3e635;
+  background: rgba(163, 230, 53, 0.12);
+  border: 1px solid rgba(163, 230, 53, 0.35);
+  padding: 0.2rem 0.5rem;
   border-radius: 0.5rem;
   white-space: nowrap;
 }
-
-.transit-chip {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.45rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-.transit-chip-duration {
-  background: rgba(56, 189, 248, 0.12);
-  color: #7dd3fc;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-.transit-chip-payment {
-  background: #0f172a;
-  color: #e2e8f0;
-  border: 1px solid #334155;
-}
-
-/* Segmented Mode Switcher Tabs */
-.transit-mode-tabs {
-  display: flex;
-  gap: 0.35rem;
-  background: #020617;
-  padding: 0.25rem;
-  border-radius: 0.75rem;
-  border: 1px solid #1e293b;
-  overflow-x: auto;
-}
-.transit-mode-tab {
-  flex: 1;
-  min-width: max-content;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.65rem;
-  border-radius: 0.55rem;
-  font-size: 0.72rem;
+.transit-route {
+  font-size: 0.9rem;
   font-weight: 700;
-  color: #94a3b8;
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-.transit-mode-tab:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.04);
-}
-.transit-mode-tab.active {
-  color: #06b6d4;
-  background: rgba(6, 182, 212, 0.12);
-  border-color: rgba(6, 182, 212, 0.35);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
-.transit-tab-icon {
-  font-size: 0.85rem;
-}
-.transit-tab-time {
-  font-size: 0.65rem;
-  font-weight: 800;
-  opacity: 0.8;
-  padding: 0.05rem 0.3rem;
-  border-radius: 0.3rem;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* Authentic Jeepney Dashboard Signboard */
-.transit-signboard {
-  position: relative;
-  background: linear-gradient(145deg, #181200 0%, #291c00 60%, #150f00 100%);
-  border: 2px solid #f59e0b;
-  border-radius: 0.65rem;
-  padding: 0.75rem 0.85rem;
-  box-shadow:
-    inset 0 0 10px rgba(245, 158, 11, 0.15),
-    0 4px 14px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-.transit-signboard::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #fbbf24, transparent);
-}
-.transit-signboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
-}
-.transit-signboard-tag {
-  font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  color: #fbbf24;
-  text-transform: uppercase;
-}
-.transit-signboard-badge {
-  font-size: 0.6rem;
-  font-weight: 800;
-  color: #1e1b4b;
-  background: #fbbf24;
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.25rem;
-  letter-spacing: 0.04em;
-}
-.transit-signboard-text {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 1.05rem;
-  font-weight: 900;
-  color: #fef08a;
-  letter-spacing: 0.05em;
-  line-height: 1.3;
-  text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(254, 240, 138, 0.35);
-}
-.transit-signboard-hint {
-  font-size: 0.68rem;
-  color: #d97706;
-  margin-top: 0.25rem;
-  font-weight: 500;
-}
-
-/* Visual Route Stepper */
-.transit-stepper {
-  display: flex;
-  flex-direction: column;
-  padding-left: 0.15rem;
-  margin-top: 0.25rem;
-}
-.transit-step-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-}
-.transit-step-track {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 22px;
-  flex-shrink: 0;
-  padding-top: 0.15rem;
-}
-.transit-step-marker {
-  width: 20px;
-  height: 20px;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 800;
-  z-index: 1;
-}
-.marker-start {
-  background: rgba(16, 185, 129, 0.2);
-  border: 1.5px solid #10b981;
-  color: #34d399;
-}
-.marker-transfer {
-  background: rgba(245, 158, 11, 0.2);
-  border: 1.5px solid #f59e0b;
-  color: #fbbf24;
-}
-.marker-end {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1.5px solid #ef4444;
-  color: #f87171;
-}
-.transit-step-line {
-  width: 2px;
-  flex: 1;
-  min-height: 22px;
-  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
-  margin: 2px 0;
-}
-.transit-step-content {
-  flex: 1;
-  min-width: 0;
-}
-.transit-step-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #f1f5f9;
+  color: #ffffff;
   line-height: 1.35;
 }
-.transit-step-detail {
+.transit-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.72rem;
   color: #94a3b8;
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  padding: 0.15rem 0.5rem;
-  border-radius: 0.35rem;
-  line-height: 1.4;
 }
-
-/* Local Etiquette / Tip */
+.transit-payment {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.35rem;
+  font-weight: 600;
+}
 .transit-tip {
   font-size: 0.78rem;
   color: #cbd5e1;
-  background: rgba(6, 182, 212, 0.07);
-  border-left: 3px solid #06b6d4;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0 0.55rem 0.55rem 0;
+  background: #090d16;
+  border-left: 2px solid #a3e635;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0 0.45rem 0.45rem 0;
   line-height: 1.5;
 }
-
-/* Quick Launch Links */
 .transit-link-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.75rem;
-  background: #090e17;
-  border: 1px solid #1e293b;
+  background: #090d16;
+  border: 1px solid #334155;
   color: #e2e8f0;
   border-radius: 0.65rem;
   font-size: 0.78rem;
@@ -1022,39 +791,316 @@ summary {
   transition: all 0.2s ease;
 }
 .transit-link-btn:hover {
-  border-color: #06b6d4;
-  color: #06b6d4;
-  background: #0d1522;
+  border-color: #a3e635;
+  color: #a3e635;
+  background: #111a28;
   text-decoration: none;
 }
 
-/* 1-Tap Action Buttons */
-.transit-card-actions {
-  margin-top: 0.25rem;
+/* Transit Navigator & Wayfinder V2 */
+.transit-navigator {
+  display: grid;
+  gap: 0.9rem;
 }
-.transit-maps-btn {
+.transit-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.35rem;
+  background: #000;
+  border: 1px solid #334155;
+  border-radius: 0.85rem;
+}
+.transit-mode-tab {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0.55rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+.transit-mode-tab:not(:disabled):hover {
+  border-color: #64748b;
+  color: #fff;
+}
+.transit-mode-tab-grab[aria-selected="true"] {
+  background: #f59e0b;
+  border-color: #fbbf24;
+  color: #000;
+}
+.transit-mode-tab-train[aria-selected="true"] {
+  background: #06b6d4;
+  border-color: #67e8f9;
+  color: #000;
+}
+.transit-mode-tab-local[aria-selected="true"] {
+  background: #10b981;
+  border-color: #6ee7b7;
+  color: #000;
+}
+.transit-mode-tab:disabled {
+  opacity: 0.34;
+}
+.transit-route-panel {
+  min-height: 12rem;
+}
+.transit-route-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  background: #000;
+  border: 1px solid #334155;
+  border-radius: 1rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+.transit-route-grab {
+  border-top: 3px solid #f59e0b;
+}
+.transit-route-train {
+  border-top: 3px solid #06b6d4;
+}
+.transit-route-local {
+  border-top: 3px solid #10b981;
+}
+.transit-route-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.transit-route-heading {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.transit-route-mode {
+  width: max-content;
+  max-width: 100%;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.transit-route-title {
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.transit-save-btn {
+  flex: 0 0 auto;
+}
+.transit-endpoints {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 0.75rem;
+}
+.transit-endpoint {
+  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.transit-endpoint:last-child {
+  text-align: right;
+}
+.transit-endpoint-arrow {
+  color: #94a3b8;
+  font-weight: 900;
+}
+.transit-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.transit-fact {
+  min-width: 0;
+  padding: 0.65rem;
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: 0.65rem;
+}
+.transit-fact-label,
+.transit-callout-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.transit-fact-value {
+  display: block;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.transit-payment-callout {
+  padding: 0.75rem;
+  background: #0f172a;
+  border-left: 3px solid #06b6d4;
+  border-radius: 0 0.65rem 0.65rem 0;
+}
+.transit-callout-text {
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.transit-signboard {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  background: rgba(245, 158, 11, 0.13);
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  border-radius: 0.75rem;
+  color: #fef3c7;
+}
+.transit-signboard-icon {
+  flex: 0 0 auto;
+}
+.transit-signboard-label {
+  flex: 0 0 auto;
+  color: #fbbf24;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+.transit-signboard-text {
+  color: #fff7ed;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.transit-wayfinder {
+  display: grid;
+  gap: 0.65rem;
+}
+.transit-wayfinder-title {
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.transit-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.transit-step {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.7rem;
+  min-height: 4.25rem;
+}
+.transit-step-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.transit-step-rail::after {
+  content: "";
+  position: absolute;
+  top: 1.85rem;
+  bottom: -0.15rem;
+  width: 2px;
+  background: #334155;
+}
+.transit-step:last-child .transit-step-rail::after {
+  display: none;
+}
+.transit-step-node {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.5rem 0.95rem;
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.35);
-  color: #38bdf8;
-  border-radius: 0.65rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  min-height: 38px;
-  user-select: none;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 1.8rem;
+  border-radius: 9999px;
+  background: #020617;
+  border: 2px solid #06b6d4;
+  color: #ecfeff;
+  font-size: 0.7rem;
+  font-weight: 900;
 }
-.transit-maps-btn:hover {
-  background: rgba(6, 182, 212, 0.25);
-  border-color: #38bdf8;
-  color: #ffffff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+.transit-route-grab .transit-step-node {
+  border-color: #f59e0b;
+}
+.transit-route-local .transit-step-node {
+  border-color: #10b981;
+}
+.transit-step-content {
+  min-width: 0;
+  padding: 0 0 0.9rem;
+}
+.transit-step-title {
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.transit-step-instruction {
+  margin-top: 0.18rem;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.transit-step-landmark,
+.transit-step-transfer {
+  margin-top: 0.3rem;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.transit-step-transfer {
+  color: #67e8f9;
+  font-weight: 700;
+}
+.transit-route-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding-top: 0.2rem;
+}
+.transit-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 46px;
+  padding: 0.55rem 0.7rem;
+  background: #0f172a;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  border-radius: 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 800;
   text-decoration: none;
+  text-align: center;
+}
+.transit-action-btn:hover {
+  border-color: #06b6d4;
+  background: #083344;
+  color: #fff;
+  text-decoration: none;
+}
+.transit-action-icon {
+  flex: 0 0 auto;
 }
 
 /* Local Flavors & Dining Guide Styles */
@@ -1483,4 +1529,28 @@ summary {
   background: rgba(148, 163, 184, 0.15);
   color: #cbd5e1;
   border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+@media (max-width: 480px) {
+  .transit-mode-tab {
+    font-size: 0.68rem;
+    padding-inline: 0.25rem;
+  }
+  .transit-route-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .transit-save-btn {
+    align-self: flex-start;
+  }
+  .transit-fact-grid {
+    grid-template-columns: 1fr;
+  }
+  .transit-route-actions {
+    grid-template-columns: 1fr;
+  }
+  .transit-signboard {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+  }
 }

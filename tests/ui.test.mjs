@@ -271,7 +271,6 @@ test("accommodation type filters update badge, provider links, and planner selec
   const cards = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".stay-card, .provider-card");
   assert.ok(cards.length >= 1);
 
-  // Click Airbnb / Rentals filter
   app.$("stayFilterRental").click();
   await tick();
   assert.equal(app.$("activeStayBadge").textContent, "Airbnb / Vacation Rentals");
@@ -281,7 +280,6 @@ test("accommodation type filters update badge, provider links, and planner selec
   const rentalLinks = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll("a");
   assert.ok(rentalLinks.length >= 1);
 
-  // Click All filter
   app.$("stayFilterAll").click();
   await tick();
   assert.equal(app.$("activeStayBadge").textContent, "All Accommodations");
@@ -289,182 +287,48 @@ test("accommodation type filters update badge, provider links, and planner selec
 
   app.dom.window.close();
 });
-test("transit navigator renders high-contrast transit cards and deep links", async () => {
+test("transit navigator renders segmented modes, wayfinder steps, signboard cues, and route actions", async () => {
   const app = await setup();
   await app.generate();
 
   assert.equal(app.$("transitSection").classList.contains("hidden"), false);
-  const transitCards = app.$("transitCardsGrid").querySelectorAll(".transit-card");
-  assert.ok(transitCards.length >= 2);
+  assert.ok(app.$("transitNavigator"));
 
-  const firstBadge = transitCards[0].querySelector(".transit-mode-badge");
-  assert.ok(firstBadge);
-  assert.ok(firstBadge.textContent.length > 0);
-
-  const fareChip = transitCards[0].querySelector(".transit-fare-chip");
-  assert.ok(fareChip);
-  assert.ok(fareChip.textContent.includes("₱"));
-
-  const actionLinks = app.$("transitLinksRow").querySelectorAll(".transit-link-btn");
-  assert.ok(actionLinks.length >= 4);
-  assert.ok([...actionLinks].some((l) => l.href.includes("grab.com") || l.href.includes("sakay.ph")));
-
-  app.dom.window.close();
-});
-test("transit wayfinder supports multi-modal switching, route steppers, signboards and mode filter", async () => {
-  const multiModalTransitBlock = `## Day 1 Plan
-Transfer between districts.
-
-\`\`\`transit
-[
-  {
-    "legTitle": "BGC to Intramuros",
-    "modes": {
-      "grab": {
-        "duration": "35 mins",
-        "costPHP": "₱350 - ₱420",
-        "payment": "GrabPay / CC",
-        "tip": "Use Skyway during peak hours.",
-        "steps": [
-          { "node": "Book GrabCar at Market! Market! Bay", "detail": "Verify plate number" },
-          { "node": "Alight at Intramuros Gate", "detail": "Direct drop-off at entrance" }
-        ]
-      },
-      "train": {
-        "duration": "45 mins",
-        "costPHP": "₱50 - ₱65",
-        "payment": "Beep Card",
-        "steps": [
-          { "node": "Board MRT-3 at Ayala Station", "detail": "Tap Beep Card" },
-          { "node": "Transfer at Taft Station to LRT-1", "detail": "Take connecting footbridge" },
-          { "node": "Alight at Central Terminal Station", "detail": "Walk 5 mins to gate" }
-        ]
-      },
-      "local": {
-        "duration": "60 mins",
-        "costPHP": "₱25 - ₱35",
-        "payment": "Cash only",
-        "signboard": "QUIAPO - TAFT - LAWTON",
-        "steps": [
-          { "node": "Board Modern Jeepney", "detail": "Hand fare forward: 'Bayad po'" },
-          { "node": "Alight at Manila City Hall", "detail": "Call out: 'Para po'" }
-        ]
-      }
-    }
-  }
-]
-\`\`\`
-`;
-
-  const app = await setup({
-    post: (url) => {
-      if (url.endsWith("/travel")) {
-        return Response.json({
-          result: normalizeInteraction(interaction(multiModalTransitBlock)),
-          conversation: "signed-test-token",
-        });
-      }
-      return Response.json({ status: "success" });
-    },
-  });
-  await app.generate();
-
-  const transitCards = app.$("transitCardsGrid").querySelectorAll(".transit-card");
-  assert.equal(transitCards.length, 1);
-  const card = transitCards[0];
-
-  // Verify route title
-  const title = card.querySelector(".transit-leg-title");
-  assert.ok(title);
-  assert.equal(title.textContent, "BGC to Intramuros");
-
-  // Verify mode tabs exist for grab, train, local
-  const tabs = card.querySelectorAll(".transit-mode-tab");
+  const tabs = app.$("transitNavigator").querySelectorAll("[data-transit-mode]");
   assert.equal(tabs.length, 3);
+  const grabTab = app.$("transitNavigator").querySelector('[data-transit-mode="grab"]');
+  const trainTab = app.$("transitNavigator").querySelector('[data-transit-mode="train"]');
+  const localTab = app.$("transitNavigator").querySelector('[data-transit-mode="local"]');
+  assert.equal(grabTab.getAttribute("aria-selected"), "true");
+  assert.equal(trainTab.disabled, true);
+  assert.equal(localTab.disabled, false);
 
-  // Grab is active initially: verify stepper
-  const initialStepper = card.querySelector(".transit-stepper");
-  assert.ok(initialStepper);
-  const grabSteps = initialStepper.querySelectorAll(".transit-step-row");
-  assert.equal(grabSteps.length, 2);
+  let routeCard = app.$("transitRoutePanel").querySelector(".transit-route-card");
+  assert.ok(routeCard);
+  assert.ok(routeCard.textContent.includes("Airport to Cebu IT Park"));
+  assert.ok(routeCard.textContent.includes("₱350 - ₱550"));
+  assert.ok(routeCard.querySelectorAll(".transit-step-node").length >= 2);
+  let actionLinks = routeCard.querySelectorAll(".transit-action-btn");
+  assert.equal(actionLinks.length, 2);
+  assert.ok([...actionLinks].some((link) => link.href.includes("google.com/maps/dir")));
+  assert.ok([...actionLinks].some((link) => link.href.includes("sakay.ph")));
 
-  // Switch to Train tab (index 1)
-  tabs[1].click();
-  const trainStepper = card.querySelector(".transit-stepper");
-  assert.ok(trainStepper);
-  const trainSteps = trainStepper.querySelectorAll(".transit-step-row");
-  assert.equal(trainSteps.length, 3);
-  assert.ok(card.textContent.includes("Ayala Station"));
+  const beforeUrl = app.w.location.href;
+  localTab.click();
+  await tick();
+  assert.equal(app.w.location.href, beforeUrl);
+  assert.equal(localTab.getAttribute("aria-selected"), "true");
+  assert.equal(grabTab.getAttribute("aria-selected"), "false");
 
-  // Switch to Local tab (index 2)
-  tabs[2].click();
-  const signboard = card.querySelector(".transit-signboard");
+  routeCard = app.$("transitRoutePanel").querySelector(".transit-route-card");
+  assert.ok(routeCard.textContent.includes("Jeepney connection to Cebu IT Park"));
+  const signboard = routeCard.querySelector(".transit-signboard");
   assert.ok(signboard);
-  const signText = card.querySelector(".transit-signboard-text");
-  assert.ok(signText);
-  assert.equal(signText.textContent, "QUIAPO - TAFT - LAWTON");
-
-  // Test top filter buttons
-  const localFilterBtn = app.$("transitSection").querySelector("[data-transit-filter='local']");
-  assert.ok(localFilterBtn);
-  // Verify 1-tap Google Maps button
-  const mapsBtn = card.querySelector(".transit-maps-btn");
-  assert.ok(mapsBtn);
-  assert.ok(mapsBtn.href.includes("google.com/maps/dir/?api=1&destination=Intramuros"));
-
-  app.dom.window.close();
-});
-test("transit card de-duplicates tips and cleans generic Grab filler steps", async () => {
-  const genericGrabBlock = `## Transit
-\`\`\`transit
-[
-  {
-    "legTitle": "Makati to BGC",
-    "modes": {
-      "grab": {
-        "duration": "20 mins",
-        "costPHP": "₱200 - ₱250",
-        "payment": "GrabPay",
-        "tip": "Use Kalayaan Flyover for faster transit.",
-        "steps": [
-          { "node": "Book GrabCar", "detail": "Use Kalayaan Flyover for faster transit." },
-          { "node": "Alight at destination", "detail": "Arrive at route endpoint" }
-        ]
-      }
-    }
-  }
-]
-\`\`\`
-`;
-
-  const app = await setup({
-    post: (url) => {
-      if (url.endsWith("/travel")) {
-        return Response.json({
-          result: normalizeInteraction(interaction(genericGrabBlock)),
-          conversation: "signed-test-token",
-        });
-      }
-      return Response.json({ status: "success" });
-    },
-  });
-  await app.generate();
-
-  const card = app.$("transitCardsGrid").querySelector(".transit-card");
-  assert.ok(card);
-
-  // 1. Generic Grab filler step "Alight at destination" should be omitted
-  const stepRows = card.querySelectorAll(".transit-step-row");
-  assert.equal(stepRows.length, 1);
-  assert.equal(stepRows[0].querySelector(".transit-step-title").textContent, "Book GrabCar");
-
-  // 2. Tip duplicate inside detail should be omitted since tip is rendered in the lightbulb box
-  const stepDetail = stepRows[0].querySelector(".transit-step-detail");
-  assert.equal(stepDetail, null);
-
-  const tipBox = card.querySelector(".transit-tip");
-  assert.ok(tipBox);
-  assert.ok(tipBox.textContent.includes("Kalayaan Flyover"));
+  assert.ok(signboard.textContent.includes("Signboard:"));
+  assert.ok(signboard.textContent.includes("IT PARK / LAHUG"));
+  assert.ok(routeCard.querySelectorAll(".transit-step").length >= 3);
+  actionLinks = routeCard.querySelectorAll(".transit-action-btn");
+  assert.equal(actionLinks.length, 2);
 
   app.dom.window.close();
 });
@@ -519,19 +383,15 @@ test("pinned stays shortlist opens drawer, pins stays, and deletes stays", async
   const app = await setup();
   await app.generate();
 
-  // Open Shortlist Drawer
   app.$("openShortlistBtn").click();
   assert.equal(app.$("shortlistModal").open, true);
   assert.equal(app.$("shortlistBadge").textContent, "0");
 
-  // Close drawer
   app.$("shortlistModal").close();
 
-  // Find a pin button on an accommodation card
   const pinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".stay-pin-btn, .pin-btn");
   assert.ok(pinBtns.length > 0);
 
-  // Click pin button
   pinBtns[0].click();
   await tick();
 
@@ -539,18 +399,15 @@ test("pinned stays shortlist opens drawer, pins stays, and deletes stays", async
   const updatedPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".stay-pin-btn, .pin-btn");
   assert.ok(updatedPinBtns[0].classList.contains("pinned"));
 
-  // Check item in shortlist drawer
   const shortlistItems = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
   assert.equal(shortlistItems.length, 1);
   assert.ok(shortlistItems[0].textContent.includes("Saved by Glen"));
 
-  // Click delete button
   const delBtn = shortlistItems[0].querySelector(".shortlist-delete-btn");
   assert.ok(delBtn);
   delBtn.click();
   await tick();
 
-  // Test manual Add Stay form
   app.$("openShortlistBtn").click();
   assert.equal(app.$("addStayForm").classList.contains("hidden"), true);
 
@@ -574,7 +431,6 @@ test("pinned stays shortlist opens drawer, pins stays, and deletes stays", async
   assert.ok(customItems[0].textContent.includes("₱6,200 / night"));
   assert.ok(customItems[0].textContent.includes("Saved by Glen"));
 
-  // Test Smart Paste button
   app.w.navigator.clipboard = {
     readText: async () =>
       "https://www.agoda.com/crimson-resort-and-spa/hotel/cebu-ph.html",
@@ -820,7 +676,6 @@ test("Test D — Network failure preserves local cached stays", async () => {
   await tick();
   await tick();
 
-  // Cached stays should remain visible
   assert.equal(app.$("shortlistBadge").textContent, "2");
   const items = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
   assert.equal(items.length, 2);
@@ -866,7 +721,6 @@ test("Test E & F — Pin and Delete reconcile authoritatively with Sheets", asyn
 
   await app.generate();
 
-  // Pin a stay
   const pinBtns = app.$("aiStaysGrid").querySelectorAll(".stay-pin-btn");
   assert.ok(pinBtns.length > 0);
   pinBtns[0].click();
@@ -875,7 +729,6 @@ test("Test E & F — Pin and Delete reconcile authoritatively with Sheets", asyn
 
   assert.equal(app.$("shortlistBadge").textContent, "2");
 
-  // Delete first stay
   const delBtns = app.$("shortlistItemsList").querySelectorAll(".shortlist-delete-btn");
   assert.equal(delBtns.length, 2);
   delBtns[0].click();
@@ -902,18 +755,15 @@ test("Test H — All Sheets actions use consistent tripId", async () => {
 
   await app.generate();
 
-  // Pin stay
   const pinBtns = app.$("aiStaysGrid").querySelectorAll(".stay-pin-btn");
   if (pinBtns.length) {
     pinBtns[0].click();
     await tick();
   }
 
-  // Save trip
   app.$("savePlan").click();
   await tick();
 
-  // There should be exactly 1 unique tripId across all Sheets requests
   assert.equal(observedTripIds.size, 1);
   const canonicalId = [...observedTripIds][0];
   assert.ok(canonicalId.length > 10);
@@ -959,38 +809,32 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
 
   await app.generate();
 
-  // 1. Pin a Stay
   const stayPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".pin-btn");
   assert.ok(stayPinBtns.length > 0);
   stayPinBtns[0].click();
   await tick();
   await tick();
 
-  // 2. Pin a Dining spot
   const foodPinBtns = app.$("diningCardsGrid").querySelectorAll(".pin-btn");
   assert.ok(foodPinBtns.length > 0);
   foodPinBtns[0].click();
   await tick();
   await tick();
 
-  // 3. Pin an Activity
   const actPinBtns = app.$("activitiesCardsGrid").querySelectorAll(".pin-btn");
   assert.ok(actPinBtns.length > 0);
   actPinBtns[0].click();
   await tick();
   await tick();
 
-  // 4. Pin a Transit leg
-  const transitPinBtns = app.$("transitCardsGrid").querySelectorAll(".pin-btn");
+  const transitPinBtns = app.$("transitRoutePanel").querySelectorAll(".pin-btn");
   assert.ok(transitPinBtns.length > 0);
   transitPinBtns[0].click();
   await tick();
   await tick();
 
-  // Shortlist badge should show 4 items
   assert.equal(app.$("shortlistBadge").textContent, "4");
 
-  // Open Shortlist drawer and inspect type pills
   app.$("openShortlistBtn").click();
   const items = app.$("shortlistItemsList").querySelectorAll(".shortlist-item");
   assert.equal(items.length, 4);
@@ -1003,7 +847,6 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
   assert.ok(pillTexts.some((t) => t.includes("activity")));
   assert.ok(pillTexts.some((t) => t.includes("transit")));
 
-  // Delete the food item
   const delBtns = app.$("shortlistItemsList").querySelectorAll(".shortlist-delete-btn");
   assert.equal(delBtns.length, 4);
   delBtns[1].click();
@@ -1018,16 +861,13 @@ test("Universal Saved Items — Pins stay, food, and transport and displays type
 test("First-use partner identity chooser and explicit selection without accidental toggle", async () => {
   const app = await setup({ fresh: true });
 
-  // Fresh storage: identity is not silently Glen
   assert.equal(
     app.dom.window.localStorage.getItem("saantayo_partner_identity_v1"),
     null,
   );
   assert.equal(app.$("currentPartnerLabel").textContent, "Select");
-  // Chooser opened automatically
   assert.equal(app.$("partnerModal").open, true);
 
-  // Clicking partner toggle button does NOT change identity
   app.$("partnerToggleBtn").click();
   await tick();
   assert.equal(
@@ -1035,7 +875,6 @@ test("First-use partner identity chooser and explicit selection without accident
     null,
   );
 
-  // Trying to save without selecting partner blocks save and ensures modal is open
   await app.generate();
   const stayPinBtns = (app.$("aiStaysGrid") || app.$("providerLinksGrid")).querySelectorAll(".pin-btn");
   stayPinBtns[0].click();
@@ -1043,7 +882,6 @@ test("First-use partner identity chooser and explicit selection without accident
   assert.equal(app.$("shortlistBadge").textContent, "0");
   assert.equal(app.$("partnerModal").open, true);
 
-  // Select Anne
   app.$("selectAnneBtn").click();
   await tick();
   assert.equal(
@@ -1055,7 +893,6 @@ test("First-use partner identity chooser and explicit selection without accident
 
   app.dom.window.close();
 
-  // Reload: Anne is restored and chooser does not auto-open
   const appReload = await setup({
     initial: { saantayo_partner_identity_v1: "Anne" },
   });
@@ -1116,14 +953,12 @@ test("Test A — Glen → clean Anne device cross-device synchronization", async
     return Response.json({ status: "success" });
   };
 
-  // Device A (Glen)
   const deviceA = await setup({
     initial: { saantayo_partner_identity_v1: "Glen" },
     sheetsHandler: sheetsBackendHandler,
   });
 
   await deviceA.generate();
-  // Pin stay as Glen
   const stayPinBtns = (deviceA.$("aiStaysGrid") || deviceA.$("providerLinksGrid")).querySelectorAll(".pin-btn");
   stayPinBtns[0].click();
   await tick();
@@ -1133,17 +968,14 @@ test("Test A — Glen → clean Anne device cross-device synchronization", async
   assert.equal(backendItems[0].savedBy, "Glen");
   deviceA.dom.window.close();
 
-  // Device B (Anne) - completely fresh localStorage
   const deviceB = await setup({
     initial: { saantayo_partner_identity_v1: "Anne" },
     sheetsHandler: sheetsBackendHandler,
   });
 
-  // Device B automatically runs list_trips at startup
   await tick();
   await tick();
 
-  // Open Shared Trips modal
   deviceB.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
   await tick();
@@ -1152,7 +984,6 @@ test("Test A — Glen → clean Anne device cross-device synchronization", async
   assert.equal(rows.length, 1);
   assert.ok(rows[0].textContent.includes("Cebu City"));
 
-  // Open the trip
   const openBtn = rows[0].querySelector('[data-load]');
   openBtn.click();
   await tick();
@@ -1215,7 +1046,6 @@ test("Test B — Anne → Glen live refresh", async () => {
   await tick();
   assert.equal(appGlen.$("shortlistBadge").textContent, "1");
 
-  // Anne adds an item on backend
   backendItems.push({
     itemId: "anne-1",
     tripId: "shared-trip-1",
@@ -1225,7 +1055,6 @@ test("Test B — Anne → Glen live refresh", async () => {
     savedBy: "Anne",
   });
 
-  // Trigger focus event on Glen's browser window
   appGlen.dom.window.dispatchEvent(new appGlen.dom.window.Event("focus"));
   await tick();
   await tick();
@@ -1306,7 +1135,6 @@ test("Cross-trip stale response protection", async () => {
   });
 
   await tick();
-  // While trip-A get_items is in flight, user opens trip-B via Shared Trips modal
   app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
   const openTripBBtn = app.$("savedTripsList").querySelectorAll('[data-load]')[1];
@@ -1314,15 +1142,12 @@ test("Cross-trip stale response protection", async () => {
   await tick();
   await tick();
 
-  // Active trip is now Baguio (trip-B)
   assert.equal(app.$("resultMetaBadge").textContent, "Baguio");
 
-  // Now resolve the delayed trip-A get_items response
   tripAItemsResolver();
   await tick();
   await tick();
 
-  // Active shortlist must NOT contain Manila Hotel
   assert.equal(app.$("shortlistBadge").textContent, "1");
   app.$("openShortlistBtn").click();
   await tick();
@@ -1376,7 +1201,6 @@ test("Authoritative empty state reconciliation clears stale local cache", async 
   await tick();
   assert.equal(app.$("shortlistItemsList").querySelectorAll(".shortlist-item").length, 0);
 
-  // Local storage for that trip is also emptied
   const localTripsData = JSON.parse(app.dom.window.localStorage.getItem("saantayo_trips_v2"));
   assert.deepEqual(localTripsData.trips[0].savedItems, []);
 
@@ -1409,7 +1233,6 @@ test("Offline shared-trip cache persists descriptors across restarts", async () 
   await tick();
   await tick();
 
-  // Open Shared Trips modal while offline
   app.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
 
@@ -1442,7 +1265,6 @@ test("Authoritative empty Shared Trips snapshot overrides stale local trips and 
     ],
   };
 
-  // Run 1: Local device has stale trips A & B, but Sheets authoritative list_trips returns []
   const app1 = await setup({
     initial: {
       saantayo_partner_identity_v1: "Glen",
@@ -1461,10 +1283,8 @@ test("Authoritative empty Shared Trips snapshot overrides stale local trips and 
   await tick();
   await tick();
 
-  // Shared trips badge must be 0
   assert.equal(app1.$("savedCountBadge").textContent, "0");
 
-  // Open modal: must NOT render stale Trip A or Trip B
   app1.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
   await tick();
@@ -1482,7 +1302,6 @@ test("Authoritative empty Shared Trips snapshot overrides stale local trips and 
   };
   app1.dom.window.close();
 
-  // Run 2: Reload with backend offline / network failure
   const app2 = await setup({
     initial: storageAfterRun1,
     sheetsHandler: () => {
@@ -1495,7 +1314,6 @@ test("Authoritative empty Shared Trips snapshot overrides stale local trips and 
   await tick();
   await tick();
 
-  // Cached authoritative [] must NOT resurrect stale local trips
   assert.equal(app2.$("savedCountBadge").textContent, "0");
   app2.dom.window.document.querySelector('[data-dialog="savedTripsModal"]').click();
   await tick();
@@ -1550,10 +1368,8 @@ test("Compatibility regression — current.savedItems contains all types while c
   await tick();
   await tick();
 
-  // Shortlist UI displays all 4 items
   assert.equal(app.$("shortlistBadge").textContent, "4");
 
-  // Verify persisted trip in localStorage has universal savedItems (4 items) and stay-only stays (1 item)
   const localData = JSON.parse(app.dom.window.localStorage.getItem("saantayo_trips_v2"));
   const persistedTrip = localData.trips.find((t) => t.id === "mixed-trip-1");
   assert.ok(persistedTrip);
@@ -1617,20 +1433,16 @@ test("Global Shared Shortlist — Multi-trip items, partner filtering (All / Gle
   await tick();
   await tick();
 
-  // Shortlist badge shows 3 (global count across all trips)
   assert.equal(app.$("shortlistBadge").textContent, "3");
 
-  // Open shortlist drawer
   app.$("openShortlistBtn").click();
   await tick();
 
-  // By default, 'all' filter is active
   let displayed = app
     .$("shortlistItemsList")
     .querySelectorAll(".shortlist-item");
   assert.equal(displayed.length, 3);
 
-  // Click existing 'Glen' partner filter button
   const glenBtn = app
     .$("shortlistPartnerFilter")
     .querySelector('[data-partner-filter="Glen"]');
@@ -1645,7 +1457,6 @@ test("Global Shared Shortlist — Multi-trip items, partner filtering (All / Gle
   assert.ok(glenTexts.some((t) => t.includes("Cloud 9 Surfing")));
   assert.ok(!glenTexts.some((t) => t.includes("Shaka Cafe")));
 
-  // Click existing 'Anne' partner filter button
   const anneBtn = app
     .$("shortlistPartnerFilter")
     .querySelector('[data-partner-filter="Anne"]');
@@ -1658,7 +1469,6 @@ test("Global Shared Shortlist — Multi-trip items, partner filtering (All / Gle
   assert.ok(displayed[0].textContent.includes("Shaka Cafe"));
   assert.ok(displayed[0].textContent.includes("Saved by Anne"));
 
-  // Click existing 'All' partner filter button again
   const allBtn = app
     .$("shortlistPartnerFilter")
     .querySelector('[data-partner-filter="all"]');
@@ -1734,7 +1544,6 @@ test("Global Shared Shortlist — Cross-trip deletion sends target item's own Tr
   await tick();
   await tick();
 
-  // Active trip is trip-a
   app.$("openShortlistBtn").click();
   await tick();
 
@@ -1743,18 +1552,17 @@ test("Global Shared Shortlist — Cross-trip deletion sends target item's own Tr
     .querySelectorAll(".shortlist-item");
   assert.equal(displayed.length, 2);
 
-  // Delete Anne's item (which belongs to trip-b)
   const delBtns = app
     .$("shortlistItemsList")
     .querySelectorAll(".shortlist-delete-btn");
   assert.equal(delBtns.length, 2);
-  delBtns[1].click(); // Deletes item-trip-b
+  delBtns[1].click();
   await tick();
   await tick();
 
   assert.ok(deletedItemPayload);
   assert.equal(deletedItemPayload.itemId, "item-trip-b");
-  assert.equal(deletedItemPayload.tripId, "trip-b"); // MUST be trip-b, NOT trip-a!
+  assert.equal(deletedItemPayload.tripId, "trip-b");
 
   app.dom.window.close();
 });
@@ -1784,7 +1592,6 @@ test("Global Shared Shortlist — Active partner identity stamps savedBy on new 
   await app.generate();
   await tick();
 
-  // Pin a stay while identity is Anne
   const stayPinBtns = (
     app.$("aiStaysGrid") || app.$("providerLinksGrid")
   ).querySelectorAll(".pin-btn");
@@ -1831,7 +1638,6 @@ test("Global Shared Shortlist — Offline fallback preserves cached global short
 
   await tick();
 
-  // Trigger shortlist drawer open
   app.$("openShortlistBtn").click();
   await tick();
 
@@ -1847,7 +1653,7 @@ test("Global Shared Shortlist — Global delete fails closed when TripID is miss
   const itemsInStore = [
     {
       itemId: "orphan-item-1",
-      tripId: "", // Deliberately missing tripId
+      tripId: "",
       itemType: "stay",
       name: "Orphaned Mystery Stay",
       location: "Unknown",
@@ -1883,7 +1689,6 @@ test("Global Shared Shortlist — Global delete fails closed when TripID is miss
     .querySelectorAll(".shortlist-item");
   assert.equal(displayedBefore.length, 1);
 
-  // Attempt to delete the orphan item
   const delBtn = app
     .$("shortlistItemsList")
     .querySelector(".shortlist-delete-btn");
@@ -1892,17 +1697,13 @@ test("Global Shared Shortlist — Global delete fails closed when TripID is miss
   await tick();
   await tick();
 
-  // Fail-closed verification:
-  // 1. Google Sheets delete_item must NOT have been called
   assert.equal(deleteCalled, false);
 
-  // 2. Shortlist must remain unchanged (item not deleted)
   const displayedAfter = app
     .$("shortlistItemsList")
     .querySelectorAll(".shortlist-item");
   assert.equal(displayedAfter.length, 1);
 
-  // 3. Error toast informing user of missing trip reference must be shown
   assert.ok(
     app.$("toastMessage").textContent.includes("missing trip reference"),
   );

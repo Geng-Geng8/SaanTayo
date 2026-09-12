@@ -61,8 +61,68 @@ export const costs = {
     "One room for two adults; flights excluded.",
   ],
 };
+const transitFixture = `\n\n\`\`\`transit
+[
+  {
+    "mode": "grab",
+    "label": "Airport to Cebu IT Park",
+    "origin": "Mactan-Cebu International Airport",
+    "destination": "Cebu IT Park",
+    "vehicle": "GrabCar",
+    "duration": "35-60 min",
+    "estimatedCostPHP": "₱350 - ₱550",
+    "paymentCaveat": "Confirm the live fare and available cash or linked-payment option in the Grab app before booking.",
+    "signboard": "",
+    "steps": [
+      {
+        "title": "Open Grab at the airport",
+        "instruction": "Set the pickup point to the designated ride-hailing pickup area shown in the app.",
+        "landmark": "Mactan-Cebu International Airport arrivals",
+        "transferTo": "GrabCar"
+      },
+      {
+        "title": "Ride to Cebu IT Park",
+        "instruction": "Confirm the plate and driver, then ride directly to Cebu IT Park.",
+        "landmark": "Cebu IT Park",
+        "transferTo": ""
+      }
+    ]
+  },
+  {
+    "mode": "local",
+    "label": "Jeepney connection to Cebu IT Park",
+    "origin": "Ayala Center Cebu",
+    "destination": "Cebu IT Park",
+    "vehicle": "Jeepney",
+    "duration": "15-30 min",
+    "estimatedCostPHP": "₱15 - ₱30",
+    "paymentCaveat": "Carry small PHP cash for the jeepney fare; do not assume a Beep card is accepted.",
+    "signboard": "IT PARK / LAHUG",
+    "steps": [
+      {
+        "title": "Find the local jeepney loading area",
+        "instruction": "Go to the designated public-transport loading area near Ayala Center Cebu and confirm the current route with the dispatcher.",
+        "landmark": "Ayala Center Cebu",
+        "transferTo": "Jeepney marked IT PARK / LAHUG"
+      },
+      {
+        "title": "Check the dashboard signboard",
+        "instruction": "Board only after confirming the vehicle is serving Cebu IT Park and tell the driver your stop.",
+        "landmark": "Jeepney dashboard / windshield sign",
+        "transferTo": "Cebu IT Park"
+      },
+      {
+        "title": "Get off at Cebu IT Park",
+        "instruction": "Ask the driver to signal the correct drop-off, then continue on foot inside the district.",
+        "landmark": "Cebu IT Park",
+        "transferTo": ""
+      }
+    ]
+  }
+]
+\`\`\``;
 export function interaction(
-  text = "## Day 1 — Cebu City\n\nMorning: Explore the heritage district.\n\nLunch: Local food in the same neighbourhood.\n\nAfternoon: Allow time for heat and traffic.\n\nEvening: Keep dinner close to your base.\n\nEstimated room: ₱1,800 per group per night. Meals: ₱600 per person per day.\n\n**Needs confirmation:** opening hours and transport prices.\n\n| Area | Transport | Notes |\n|---|---|---|\n| Heritage district | Walk / taxi | Keep activities clustered |",
+  text = "## Day 1 — Cebu City\n\nMorning: Explore the heritage district.\n\nLunch: Local food in the same neighbourhood.\n\nAfternoon: Allow time for heat and traffic.\n\nEvening: Keep dinner close to your base.\n\nEstimated room: ₱1,800 per group per night. Meals: ₱600 per person per day.\n\n**Needs confirmation:** opening hours and transport prices.\n\n| Area | Transport | Notes |\n|---|---|---|\n| Heritage district | Walk / taxi | Keep activities clustered |" + transitFixture,
   maps = true,
 ) {
   return {
