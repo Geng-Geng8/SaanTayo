@@ -169,7 +169,6 @@ test("journey endpoint invokes advisor when structured routing has no useful rou
 test("grounded advisor replaces the dead-end UI and clarification can retry in app", () => {
   const dom = new JSDOM("<main></main>", { url: "https://app.example" });
   global.document = dom.window.document;
-  global.crypto = dom.window.crypto;
   const advice = normalizeJourneyAdvice(rawAdvice, {
     sources: [source],
     mapsUsed: true,
