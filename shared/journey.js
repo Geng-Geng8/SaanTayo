@@ -5,9 +5,11 @@ export const COST_SOURCES = Object.freeze({
   official_operator: "Official operator fare",
   saantayo_estimate: "SaanTayo estimate",
   user_confirmed: "User-confirmed fare",
+  free_walk: "Free · no fare",
   unknown: "Fare needs confirmation",
 });
 export const MODE_LABELS = Object.freeze({
+  walk: "🚶 Walk",
   grab: "🚗 Grab estimate",
   train: "🚊 Train / Transit",
   local: "🚐 Jeepney / Local",
@@ -32,9 +34,11 @@ export function normalizeRoute(raw = {}, index = 0) {
   if (!sourced) return null;
   // Reject overlong wayfinders instead of silently dropping the arrival/transfer.
   if (list(raw.steps).length > 80) return null;
-  const costSource = Object.hasOwn(COST_SOURCES, raw.costSource)
-    ? raw.costSource
-    : "unknown";
+  const costSource = raw.mode === "walk"
+    ? "free_walk"
+    : Object.hasOwn(COST_SOURCES, raw.costSource)
+      ? raw.costSource
+      : "unknown";
   const range = raw.costRangePHP;
   const costRangePHP =
     costSource !== "unknown" &&
@@ -95,18 +99,20 @@ export function normalizeRoute(raw = {}, index = 0) {
   return {
     id: `route-${index}`,
     mode: raw.mode,
-    modeFamily: raw.mode === "grab" ? "driving" : "transit",
+    modeFamily: raw.mode === "grab" ? "driving" : raw.mode === "walk" ? "walking" : "transit",
     label: text(raw.label) || MODE_LABELS[raw.mode],
     origin: text(raw.origin),
     destination: text(raw.destination),
     durationMinutes: number(raw.durationMinutes),
     distanceMeters: number(raw.distanceMeters),
-    totalCostPHP: costSource !== "unknown" ? number(raw.totalCostPHP) : null,
+    totalCostPHP: raw.mode === "walk" ? 0 : costSource !== "unknown" ? number(raw.totalCostPHP) : null,
     costRangePHP,
     costSource,
-    costBasis: ["person", "vehicle"].includes(raw.costBasis)
+    costBasis: ["person", "vehicle", "free"].includes(raw.costBasis)
       ? raw.costBasis
-      : "unknown",
+      : raw.mode === "walk"
+        ? "free"
+        : "unknown",
     capacity: number(raw.capacity),
     confidence: raw.source === "google_routes" ? "provider" : "confirmed",
     source: raw.source,
@@ -191,6 +197,14 @@ export function legacyJourneys(markdown, defaults = {}) {
   });
 }
 export function partyCost(route, people) {
+  if (route.mode === "walk") {
+    return {
+      min: 0,
+      max: 0,
+      perPersonMin: 0,
+      perPersonMax: 0,
+    };
+  }
   if (
     !Number.isInteger(people) ||
     people < 1 ||
@@ -238,33 +252,79 @@ export function recommendJourney(journey, people = 1) {
       if (priced.every(([other, c]) => other === r || cost.max < c.min))
         r.bestFor.push("Cheapest");
   }
-  // Recommendation is explicitly speed-first; no inferred luggage/traffic badges.
-  const recommended = candidates.find((r) => r.bestFor.includes("Fastest"));
+
+  // For short journeys, walking is considered before recommending a vehicle.
+  const walk = candidates.find((r) => r.mode === "walk");
+  const isWalkableShortTrip =
+    walk &&
+    walk.distanceMeters !== null &&
+    walk.distanceMeters <= 2000 &&
+    walk.durationMinutes !== null &&
+    walk.durationMinutes <= 25;
+
+  let recommended = null;
+  if (isWalkableShortTrip) {
+    const drive = candidates.find((r) => r.mode === "grab");
+    const driveSavings =
+      drive && drive.durationMinutes !== null && walk.durationMinutes !== null
+        ? walk.durationMinutes - drive.durationMinutes
+        : 0;
+    // When driving savings is under 15 min, Grab booking + pickup wait erases the advantage.
+    if (driveSavings <= 15) {
+      walk.bestFor.push("Recommended for short trip");
+      recommended = walk;
+    }
+  }
+
+  if (!recommended) {
+    recommended = candidates.find((r) => r.bestFor.includes("Fastest"));
+  }
   return { ...journey, routes, recommendedRouteId: recommended?.id || null };
 }
 export function comparePartyRoutes(journey, people) {
   const grab = journey.routes.find((r) => r.mode === "grab");
-  const transit = journey.routes.find((r) => r.mode !== "grab");
+  const transit = journey.routes.find(
+    (r) => r.mode === "train" || r.mode === "local",
+  );
   if (
-    !grab ||
-    !transit ||
-    grab.origin !== transit.origin ||
-    grab.destination !== transit.destination ||
-    grab.durationMinutes === null ||
-    transit.durationMinutes === null
-  )
-    return "";
-  const g = partyCost(grab, people),
-    t = partyCost(transit, people);
-  const saved = Math.round(transit.durationMinutes - grab.durationMinutes);
-  if (!g || !t || g.min <= t.max || saved <= 0) return "";
-  return `For ${people} traveller${people === 1 ? "" : "s"}, Grab costs about ${moneyRange(g.min - t.max, g.max - t.min)} more and the driving route takes about ${saved} fewer minutes. Pickup wait is not included.`;
+    grab &&
+    transit &&
+    grab.origin === transit.origin &&
+    grab.destination === transit.destination &&
+    grab.durationMinutes !== null &&
+    transit.durationMinutes !== null
+  ) {
+    const g = partyCost(grab, people),
+      t = partyCost(transit, people);
+    const saved = Math.round(transit.durationMinutes - grab.durationMinutes);
+    if (g && t && g.min > t.max && saved > 0) {
+      return `For ${people} traveller${people === 1 ? "" : "s"}, Grab costs about ${moneyRange(g.min - t.max, g.max - t.min)} more and the driving route takes about ${saved} fewer minutes. Pickup wait is not included.`;
+    }
+  }
+  const walk = journey.routes.find((r) => r.mode === "walk");
+  if (
+    grab &&
+    walk &&
+    grab.origin === walk.origin &&
+    grab.destination === walk.destination &&
+    walk.distanceMeters !== null &&
+    walk.distanceMeters <= 2000 &&
+    walk.durationMinutes !== null &&
+    grab.durationMinutes !== null
+  ) {
+    const distKm = (walk.distanceMeters / 1000).toFixed(1);
+    const walkMin = Math.ceil(walk.durationMinutes);
+    const driveMin = Math.ceil(grab.durationMinutes);
+    return `Walking is recommended for this short trip (~${distKm} km, ~${walkMin} min, ₱0). Grab driving takes about ${driveMin} min, but pickup wait is not included and live fare applies.`;
+  }
+  return "";
 }
 export const money = (v) =>
   `₱${v.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
 export const moneyRange = (min, max) =>
   min === max ? money(min) : `${money(min)}–${money(max)}`;
 export function fareLabel(route) {
+  if (route.mode === "walk") return "₱0";
   if (route.costSource === "unknown")
     return route.mode === "grab"
       ? "Check live Grab fare"
@@ -282,10 +342,16 @@ export function buildGoogleMapsDirectionsUrl(
   { mode = "transit" } = {},
 ) {
   if (!text(destination)) return null;
+  const travelmode =
+    mode === "grab"
+      ? "driving"
+      : mode === "walk"
+        ? "walking"
+        : "transit";
   const params = new URLSearchParams({
     api: "1",
     destination: text(destination),
-    travelmode: mode === "grab" ? "driving" : "transit",
+    travelmode,
   });
   if (text(origin)) params.set("origin", text(origin));
   return `https://www.google.com/maps/dir/?${params}`;
@@ -307,7 +373,7 @@ export function buildTransitRouteLinks(route) {
     },
   ];
   if (
-    route.mode !== "grab" &&
+    (route.mode === "train" || route.mode === "local") &&
     /manila|makati|taguig|pasig|quezon|mandaluyong|pasay|bgc|intramuros/i.test(
       `${route.origin} ${route.destination}`,
     )

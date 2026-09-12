@@ -39,6 +39,54 @@ export const driving = {
     },
   ],
 };
+export const shortTripQuery = {
+  origin: "Rizal Park, Ermita, Manila",
+  destination: "National Museum of Fine Arts, Padre Burgos Ave, Ermita, Manila",
+  departureTime: "2026-09-12T08:00:00Z",
+  people: 1,
+};
+export const shortDriving = {
+  geocodingResults,
+  routes: [
+    {
+      duration: "240s",
+      distanceMeters: 800,
+    },
+  ],
+};
+export function walking({ duration = "660s", distanceMeters = 800 } = {}) {
+  return {
+    geocodingResults,
+    routes: [
+      {
+        duration,
+        distanceMeters,
+        legs: [
+          {
+            steps: [
+              {
+                travelMode: "WALK",
+                staticDuration: "180s",
+                distanceMeters: 200,
+                navigationInstruction: {
+                  instructions: "Head northeast on Padre Burgos Ave",
+                },
+              },
+              {
+                travelMode: "WALK",
+                staticDuration: "480s",
+                distanceMeters: 600,
+                navigationInstruction: {
+                  instructions: "Turn right toward National Museum of Fine Arts",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
 export function transit({ fare = true, rides = 3, rail = true } = {}) {
   return {
     geocodingResults,

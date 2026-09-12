@@ -17,6 +17,7 @@ import {
 import {
   normalizeGoogleTransit,
   normalizeGoogleDriving,
+  normalizeGoogleWalking,
   planJourney,
   createGoogleProvider,
   phpMoney,
@@ -33,6 +34,8 @@ import {
   transit,
   journeyFixture,
   localRoute,
+  walking,
+  shortTripQuery,
 } from "./journey-fixtures.mjs";
 import { apiRequest, env, trip, interaction } from "./fixtures.mjs";
 
@@ -486,3 +489,49 @@ test("older saved transit prices and tips are not presented as current facts", (
   assert.doesNotMatch(row.textContent, /₱42|Fake Central Station/);
   dom.window.close();
 });
+
+test("Google walking captures duration, distance, zero cost, free basis, and steps", () => {
+  const [route] = normalizeGoogleWalking(walking(), shortTripQuery);
+  assert.equal(route.mode, "walk");
+  assert.equal(route.source, "google_routes");
+  assert.equal(route.durationMinutes, 11);
+  assert.equal(route.distanceMeters, 800);
+  assert.equal(route.totalCostPHP, 0);
+  assert.equal(route.costBasis, "free");
+  assert.equal(route.costSource, "free_walk");
+  assert.equal(route.transferCount, 0);
+  assert.equal(route.steps.length, 4);
+  assert.equal(route.steps[0].type, "start");
+  assert.equal(route.steps[1].type, "walk");
+  assert.equal(route.steps[3].type, "arrive");
+  assert.equal(fareLabel(route), "₱0");
+});
+
+test("Maps links for walk use travelmode=walking and exclude Sakay transit lookup", () => {
+  const url = buildGoogleMapsDirectionsUrl("Rizal Park, Manila", "National Museum, Manila", { mode: "walk" });
+  assert.match(url, /travelmode=walking/);
+  const links = buildTransitRouteLinks({
+    origin: "Rizal Park, Manila",
+    destination: "National Museum, Manila",
+    mode: "walk",
+  });
+  assert.equal(links.length, 1);
+  assert.equal(links[0].id, "maps");
+});
+
+test("partyCost for walk returns zero cost regardless of travellers", () => {
+  const [route] = normalizeGoogleWalking(walking(), shortTripQuery);
+  const cost1 = partyCost(route, 1);
+  const cost4 = partyCost(route, 4);
+  assert.deepEqual(cost1, { min: 0, max: 0, perPersonMin: 0, perPersonMax: 0 });
+  assert.deepEqual(cost4, { min: 0, max: 0, perPersonMin: 0, perPersonMax: 0 });
+});
+
+test("FIELD_MASKS.WALK includes geocoding, route duration, distance, and navigation instructions", () => {
+  assert.ok(FIELD_MASKS.WALK.includes("routes.duration"));
+  assert.ok(FIELD_MASKS.WALK.includes("routes.distanceMeters"));
+  assert.ok(FIELD_MASKS.WALK.includes("navigationInstruction.instructions"));
+  assert.ok(!FIELD_MASKS.WALK.includes("transitFare"));
+  assert.ok(!FIELD_MASKS.WALK.includes("tollInfo"));
+});
+

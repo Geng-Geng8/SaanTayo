@@ -319,3 +319,58 @@ test("retry on resolved places provides future departureTime to avoid Google Rou
     `Retry departure time must be future buffered, got ${planned[1].departureTime}`,
   );
 });
+
+test("grounded walking fallback renders grounded estimate chip, 0 PHP range, and pedestrian steps", () => {
+  const dom = new JSDOM("<main></main>", { url: "https://app.example" });
+  global.document = dom.window.document;
+  const walkAdvice = {
+    status: "grounded",
+    resolvedOrigin: "Rizal Park, Manila",
+    resolvedDestination: "National Museum of Fine Arts, Manila",
+    confidence: "high",
+    assumption: "Interpreted destinations as adjacent Ermita landmarks.",
+    summary: "These landmarks are within short walking distance across Padre Burgos Ave.",
+    recommendedMode: "walk",
+    options: [
+      {
+        mode: "walk",
+        label: "Walking route",
+        confidence: "high",
+        durationMin: 10,
+        durationMax: 15,
+        costMinPHP: 0,
+        costMaxPHP: 0,
+        costBasis: "free",
+        why: "Walking is practical, direct, and zero fare.",
+        caveats: ["Use marked pedestrian crossings on Padre Burgos Ave."],
+        steps: [
+          { type: "start", title: "Rizal Park", instruction: "Head northeast toward Padre Burgos Ave.", landmark: "Rizal Monument" },
+          { type: "walk", title: "Cross Padre Burgos Ave", instruction: "Use designated pedestrian crosswalk with traffic signals.", landmark: "National Museum" },
+          { type: "arrive", title: "National Museum of Fine Arts", instruction: "Enter via main visitor gate.", landmark: "Padre Burgos Ave" },
+        ],
+      },
+    ],
+    suggestions: [],
+  };
+  const normalized = normalizeJourneyAdvice(walkAdvice, {
+    sources: [{ type: "maps", title: "National Museum of Fine Arts", url: "https://maps.google.com/?cid=123" }],
+    mapsUsed: true,
+  });
+  assert.equal(normalized.status, "grounded");
+  assert.equal(normalized.recommendedMode, "walk");
+  assert.equal(normalized.options[0].costMinPHP, 0);
+
+  const root = renderJourney(
+    { routes: [], status: "unavailable", warnings: [] },
+    { advisor: normalized },
+  );
+  assert.match(root.textContent, /◆ Grounded estimate/);
+  assert.match(root.textContent, /🚶 Walking route/);
+  assert.match(root.textContent, /10–15 min/);
+  assert.match(root.textContent, /₱0 · Free walk/);
+  assert.match(root.textContent, /Recommended/);
+  assert.match(root.textContent, /Use marked pedestrian crossings/);
+  assert.doesNotMatch(root.textContent, /✓ Verified route/);
+  dom.window.close();
+});
+

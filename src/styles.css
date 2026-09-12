@@ -1496,10 +1496,11 @@ summary {
 .journey-overview { display: grid; gap: .5rem; }
 .journey-option { text-align: left; padding: .8rem; border: 1px solid #334155; border-radius: .75rem; background: #0f172a; color: #e2e8f0; font-size: .85rem; min-height: 44px; }
 .journey-option:hover { border-color: #22d3ee; }
+.journey-option.recommended { border-color: #06b6d4; background: linear-gradient(180deg, rgba(6, 182, 212, 0.16), #0f172a); box-shadow: inset 3px 0 #06b6d4, 0 4px 14px rgba(6, 182, 212, 0.12); font-weight: 700; }
 .journey-results .transit-mode-tabs { overflow: visible; flex-wrap: wrap; }
 .journey-results .transit-mode-tab { min-width: 0; min-height: 44px; white-space: normal; }
 .journey-results .transit-mode-tab[aria-selected="true"] { background: #164e63; color: #ecfeff; border-color: #22d3ee; }
-.journey-results .transit-mode-tab:disabled { opacity: .6; cursor: not-allowed; }
+.journey-results .transit-mode-tab:disabled, .transit-mode-tab-disabled { opacity: .45; cursor: not-allowed; border-color: transparent !important; color: #64748b !important; background: transparent !important; box-shadow: none !important; }
 .journey-mode-panel { display: grid; gap: .8rem; }
 .journey-route { gap: .65rem; overflow-wrap: anywhere; }
 .journey-route .transit-card-header { align-items: flex-start; }

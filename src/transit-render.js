@@ -47,6 +47,7 @@ function estimateRange(min, max, suffix = "") {
     : `${Math.ceil(min)}–${Math.ceil(max)}${suffix}`;
 }
 function estimateCost(option) {
+  if (option.mode === "walk") return "₱0 · Free walk";
   const { costMinPHP: min, costMaxPHP: max } = option;
   if (min == null && max == null) return "Fare needs confirmation";
   if (min == null) return `Up to ₱${Math.ceil(max)}`;
@@ -153,7 +154,7 @@ function renderJourneyAdvisor(advisor, { onRefine } = {}) {
   }
 
   const grid = el("div", null, "journey-advisor-options");
-  const icons = { grab: "🚗", train: "🚊", local: "🚐" };
+  const icons = { walk: "🚶", grab: "🚗", train: "🚊", local: "🚐" };
   for (const option of advisor.options || []) {
     const card = el("article", null, "journey-advisor-card");
     if (option.mode === advisor.recommendedMode) card.classList.add("recommended");
@@ -173,7 +174,7 @@ function renderJourneyAdvisor(advisor, { onRefine } = {}) {
       el("strong", estimateCost(option)),
     );
     card.append(metrics);
-    if (option.costBasis !== "unknown")
+    if (option.costBasis !== "unknown" && option.costBasis !== "free" && option.mode !== "walk")
       card.append(
         el(
           "p",
@@ -231,28 +232,46 @@ export function renderTransitRoute(
   card.append(header);
   const badges = el("div", null, "journey-badges");
   badges.append(el("span", "✓ Verified route", "journey-trust-chip journey-trust-verified"));
-  for (const badge of [
-    ...(recommended ? ["Recommended · fastest route"] : []),
-    ...route.bestFor,
-  ])
+  const extraBadges = [];
+  if (recommended) {
+    extraBadges.push(
+      route.mode === "walk"
+        ? "Recommended · short walk"
+        : "Recommended · fastest route",
+    );
+  }
+  for (const badge of route.bestFor) {
+    if (badge === "Recommended for short trip" && recommended) continue;
+    extraBadges.push(badge);
+  }
+  for (const badge of extraBadges)
     badges.append(el("span", badge, "transit-chip transit-chip-duration"));
   card.append(
     badges,
     el("p", `${route.origin} → ${route.destination}`, "muted"),
   );
+  const timeSuffix =
+    route.mode === "grab"
+      ? " driving · pickup wait extra"
+      : route.mode === "walk"
+        ? " walking"
+        : "";
   card.append(
     el(
       "p",
-      `${minutes(route.durationMinutes)}${route.mode === "grab" ? " driving · pickup wait extra" : ""}${route.distanceMeters === null ? "" : ` · ${(route.distanceMeters / 1000).toFixed(1)} km`}`,
+      `${minutes(route.durationMinutes)}${timeSuffix}${route.distanceMeters === null ? "" : ` · ${(route.distanceMeters / 1000).toFixed(1)} km`}`,
       "journey-time",
     ),
   );
-  const payment = route.payment || "Confirm payment before boarding";
+  const payment =
+    route.mode === "walk"
+      ? "Free"
+      : route.payment || "Confirm payment before boarding";
   card.append(el("p", `${fareLabel(route)} · ${payment}`, "journey-fare"));
   card.append(el("p", COST_SOURCES[route.costSource], "muted"));
   if (route.costSource === "google_transit")
     card.append(el("p", "Google did not specify ticket type or discount eligibility. Confirm the applicable fare with the operator.", "muted"));
-  if (route.costBasis !== "unknown")
+  if (route.costBasis !== "unknown" && route.costBasis !== "free" && route.mode !== "walk")
     card.append(
       el(
         "p",
@@ -263,7 +282,7 @@ export function renderTransitRoute(
       ),
     );
   const cost = partyCost(route, people);
-  if (cost)
+  if (cost && route.mode !== "walk")
     card.append(
       el(
         "p",
@@ -429,12 +448,19 @@ export function renderJourney(
       }
       for (const p of panels.children) p.hidden = p.dataset.mode !== mode;
     };
-    for (const [mode, label] of Object.entries(MODE_LABELS)) {
+    const modeEntries = Object.entries(MODE_LABELS)
+      .filter(([mode]) => mode !== "walk" || model.routes.some((r) => r.mode === "walk"))
+      .sort(([modeA], [modeB]) => {
+        const hasA = model.routes.some((r) => r.mode === modeA) ? 1 : 0;
+        const hasB = model.routes.some((r) => r.mode === modeB) ? 1 : 0;
+        return hasB - hasA;
+      });
+    for (const [mode, label] of modeEntries) {
       const routes = model.routes.filter((r) => r.mode === mode);
       const button = el(
         "button",
         routes.length ? label : `${label} unavailable`,
-        "transit-mode-tab",
+        `transit-mode-tab${routes.length ? "" : " transit-mode-tab-disabled"}`,
       );
       button.type = "button";
       button.id = `${prefix}-tab-${mode}`;
@@ -483,11 +509,17 @@ export function renderJourney(
     });
     if (model.routes.length > 1) {
       const overview = el("div", null, "journey-overview");
-      for (const r of model.routes) {
+      const sortedRoutes = [...model.routes].sort((a, b) => {
+        if (a.id === model.recommendedRouteId) return -1;
+        if (b.id === model.recommendedRouteId) return 1;
+        return 0;
+      });
+      for (const r of sortedRoutes) {
+        const isRec = r.id === model.recommendedRouteId;
         const button = el(
           "button",
-          `${r.id === model.recommendedRouteId ? "Recommended · " : ""}${r.label} · ${minutes(r.durationMinutes)} · ${fareLabel(r)}${r.bestFor.length ? ` · ${r.bestFor.join(" · ")}` : ""}`,
-          "journey-option",
+          `${isRec ? "Recommended · " : ""}${r.label} · ${minutes(r.durationMinutes)} · ${fareLabel(r)}${r.bestFor.length ? ` · ${r.bestFor.join(" · ")}` : ""}`,
+          `journey-option${isRec ? " recommended" : ""}`,
         );
         button.type = "button";
         button.addEventListener("click", () => {
