@@ -1,4 +1,5 @@
 import { createJourneyNavigator } from "./transit-render.js";
+import { initGoMode } from "./go-mode.js";
 import { legacyJourneys, buildTransitRouteLinks } from "../shared/journey.js";
 import {
   VIBES,
@@ -54,6 +55,7 @@ let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
   transitNavigator = null,
+  goModeManager = null,
   transitContext = "",
   activePartnerFilter = "all",
   sharedTrips = [],
@@ -312,6 +314,7 @@ function showCurrent() {
     current.legacy || current.expired || current.trip?.mode !== "itinerary",
   );
   renderAccommodations();
+  goModeManager?.refresh();
   $("chatSection").classList.toggle("hidden", !!current.expired);
   renderChat();
   renderBudget();
@@ -1641,6 +1644,7 @@ for (const button of document.querySelectorAll("[data-dialog]"))
   button.addEventListener("click", () => {
     if (button.dataset.dialog === "savedTripsModal") renderSaved();
     if (button.dataset.dialog === "shortlistModal") renderShortlist();
+    if (button.dataset.dialog === "goModeModal") goModeManager?.refresh();
     $(button.dataset.dialog)?.showModal();
   });
 $("openShortlistBtn")?.addEventListener("click", () => {
@@ -1877,6 +1881,37 @@ $("selectAnneBtn")?.addEventListener("click", () => switchPartner("Anne"));
 
 $("refreshSharedTripsBtn")?.addEventListener("click", () => {
   loadSharedTripsFromSheets({ showToast: true });
+});
+
+goModeManager = initGoMode({
+  dialog: $("goModeModal"),
+  form: $("goModeForm"),
+  originInput: $("goModeOrigin"),
+  destinationInput: $("goModeDestination"),
+  quickSelect: $("goModeDestinationQuickSelect"),
+  originChipsContainer: $("goModeOriginChips"),
+  resultsContainer: $("goModeResults"),
+  statusContainer: $("goModeStatus"),
+  arrivalBanner: $("goModeArrivalBanner"),
+  arrivalText: $("goModeArrivalText"),
+  getCurrentTrip: () => current,
+  getSavedItems: () => globalSavedItems,
+  getPlanText: () => planText(),
+  lookupJourney: (query, signal) => request("journey", query, signal),
+  toast,
+  storage: typeof localStorage !== "undefined" ? localStorage : null,
+});
+
+document.querySelectorAll('[data-dialog="goModeModal"]').forEach((btn) => {
+  btn.addEventListener("click", () => {
+    goModeManager?.open();
+  });
+});
+$("openGoModeBtn")?.addEventListener("click", () => {
+  goModeManager?.open();
+});
+$("openTransitGoModeBtn")?.addEventListener("click", () => {
+  goModeManager?.open();
 });
 
 document.querySelectorAll('[data-dialog="savedTripsModal"]').forEach((btn) => {
