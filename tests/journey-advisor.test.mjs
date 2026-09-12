@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import {
   groundJourneyAdvice,
   normalizeJourneyAdvice,
+  parseAdvisorJson,
 } from "../server/journey-advisor.js";
 import { handleRequest } from "../server/worker.js";
 import { renderJourney } from "../src/transit-render.js";
@@ -256,4 +257,65 @@ test("grounded advisor replaces the dead-end UI and clarification can retry in a
   clarification.querySelector(".journey-refine-option").click();
   assert.equal(refined.origin, "National Museum of Fine Arts, Manila");
   dom.window.close();
+});
+
+test("parseAdvisorJson parses raw JSON, fenced JSON, and embedded JSON objects", () => {
+  assert.equal(parseAdvisorJson('{"status":"grounded"}').status, "grounded");
+  assert.equal(
+    parseAdvisorJson('```json\n{"status":"grounded"}\n```').status,
+    "grounded",
+  );
+  assert.equal(
+    parseAdvisorJson('Here is the advice:\n```json\n{"status":"clarify"}\n```\nDone').status,
+    "clarify",
+  );
+  assert.equal(
+    parseAdvisorJson('Here is the advice: {"status":"grounded"} hope this helps').status,
+    "grounded",
+  );
+  assert.equal(parseAdvisorJson("not valid json").status, "unavailable");
+  assert.equal(parseAdvisorJson(null).status, "unavailable");
+});
+
+test("retry on resolved places provides future departureTime to avoid Google Routes 400", async () => {
+  const q = {
+    origin: "national museum",
+    destination: "Fort Santiago, Intramuros, Manila",
+    departureTime: new Date().toISOString(),
+    people: 1,
+  };
+  const planned = [];
+  await handleRequest(
+    apiRequest("journey", q),
+    {
+      ...env,
+      GOOGLE_ROUTES_API_KEY: "routes-key",
+      GEMINI_API_KEY: "gemini-key",
+      ENABLE_GROUNDING: "true",
+      GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
+      AI_LIMITER: { limit: async () => ({ success: true }) },
+    },
+    {},
+    {
+      planJourney: async (query) => {
+        planned.push(query);
+        return planned.length === 1
+          ? { ...query, status: "unavailable", routes: [], warnings: [] }
+          : {
+              ...query,
+              status: "ok",
+              routes: [{ mode: "grab", label: "Grab · driving route" }],
+              warnings: [],
+            };
+      },
+      journeyAdvisor: async () => normalizedAdvice(),
+    },
+  );
+  assert.equal(planned.length, 2);
+  const now = Date.now();
+  const retryDeparture = Date.parse(planned[1].departureTime);
+  assert.ok(
+    retryDeparture >= now + 50000,
+    `Retry departure time must be future buffered, got ${planned[1].departureTime}`,
+  );
 });

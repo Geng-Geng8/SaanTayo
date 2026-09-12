@@ -183,7 +183,7 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
       const journeyQuery = {
         origin: from,
         destination,
-        departureTime: new Date(Math.max(departure, now)).toISOString(),
+        departureTime: new Date(Math.max(departure, now + 60000)).toISOString(),
         people: input.people,
       };
       const plan = deps.planJourney || planJourney;
@@ -222,10 +222,14 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
           advisor.resolvedDestination.toLowerCase() !== destination.toLowerCase())
       ) {
         try {
+          const retryNow = Date.now();
           const resolvedQuery = {
             ...journeyQuery,
             origin: advisor.resolvedOrigin,
             destination: advisor.resolvedDestination,
+            departureTime: new Date(
+              Math.max(departure, retryNow + 60000),
+            ).toISOString(),
           };
           const resolved = await plan(resolvedQuery, env, routeOptions);
           if (resolved.routes.length) {

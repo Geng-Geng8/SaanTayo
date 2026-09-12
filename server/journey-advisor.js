@@ -114,6 +114,27 @@ function modelText(data) {
     .join("");
 }
 
+export function parseAdvisorJson(text) {
+  if (typeof text !== "string") return { status: "unavailable" };
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {}
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    try {
+      return JSON.parse(fenced[1].trim());
+    } catch {}
+  }
+  const obj = trimmed.match(/\{[\s\S]*\}/);
+  if (obj) {
+    try {
+      return JSON.parse(obj[0]);
+    } catch {}
+  }
+  return { status: "unavailable" };
+}
+
 export function normalizeJourneyAdvice(raw, evidence = {}) {
   const status = ["grounded", "clarify", "unavailable"].includes(raw?.status)
     ? raw.status
@@ -174,7 +195,7 @@ export function normalizeJourneyAdvice(raw, evidence = {}) {
 export async function groundJourneyAdvice(
   query,
   env,
-  { fetcher, signal, timeoutMs = 12000 } = {},
+  { fetcher, signal, timeoutMs = 25000 } = {},
 ) {
   if (!env.GEMINI_API_KEY || env.ENABLE_GROUNDING !== "true")
     return normalizeJourneyAdvice({ status: "unavailable" });
@@ -199,11 +220,6 @@ export async function groundJourneyAdvice(
     { fetcher, signal, timeoutMs },
   );
   const evidence = collectSources(data);
-  let raw;
-  try {
-    raw = JSON.parse(modelText(data));
-  } catch {
-    raw = { status: "unavailable" };
-  }
+  const raw = parseAdvisorJson(modelText(data));
   return normalizeJourneyAdvice(raw, evidence);
 }

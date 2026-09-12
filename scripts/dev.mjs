@@ -20,6 +20,7 @@ export function startDevelopment({
   const env = {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     GOOGLE_ROUTES_API_KEY: process.env.GOOGLE_ROUTES_API_KEY,
+    ENABLE_GROUNDING: process.env.ENABLE_GROUNDING || "true",
     GRAB_ESTIMATE_CALIBRATIONS: process.env.GRAB_ESTIMATE_CALIBRATIONS,
     GLOBAL_LIMITER: { async limit() { return { success: true }; } },
     CONVERSATION_SECRET:

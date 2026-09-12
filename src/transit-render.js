@@ -607,7 +607,7 @@ export function createJourneyNavigator(
     const active = new AbortController();
     controller = active;
     submit.disabled = true;
-    const timer = setTimeout(() => active.abort(), 24000);
+    const timer = setTimeout(() => active.abort(), 35000);
     status.textContent = "Checking verified routes and local travel intelligence…";
     results.replaceChildren();
     try {
