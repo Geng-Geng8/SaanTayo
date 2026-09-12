@@ -1,3 +1,5 @@
+import { createJourneyNavigator } from "./transit-render.js";
+import { legacyJourneys, buildTransitRouteLinks } from "../shared/journey.js";
 import {
   VIBES,
   STAY_TYPES,
@@ -5,8 +7,6 @@ import {
   calculateBudget,
   safeUrl,
   buildAllProviderLinks,
-  parseTransitLegs,
-  buildTransitLinks,
   SHEETS_API_URL,
   cleanTripPayload,
   fetchSheetsApi,
@@ -42,8 +42,6 @@ import {
   renderProviderCard,
   renderShortlistItem,
   renderSharedTripRow,
-  renderTransitCard,
-  renderTransitLinkButton,
   renderDiningCard,
   renderActivityCard,
   renderStayCard,
@@ -55,7 +53,8 @@ const API_BASE = __API_BASE__;
 let mode = "itinerary",
   selectedVibes = [VIBES[0], VIBES[2]],
   activeStayFilter = "all",
-  activeTransitFilter = "all",
+  transitNavigator = null,
+  transitContext = "",
   activePartnerFilter = "all",
   sharedTrips = [],
   hasSharedSnapshot = false,
@@ -366,64 +365,20 @@ function currency(value) {
 }
 function renderTransit() {
   if (!current?.trip) return;
-  const rawText = planText();
-  const legs = parseTransitLegs(rawText, {
-    origin: current.trip.origin || "Arrival Base",
-    destination: current.trip.destination,
-  });
-
-  // Synchronize top filter buttons
-  document.querySelectorAll("[data-transit-filter]").forEach((b) => {
-    const isSelected = b.dataset.transitFilter === activeTransitFilter;
-    b.setAttribute("aria-selected", isSelected ? "true" : "false");
-    b.className = `transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer ${
-      isSelected
-        ? "bg-cyan-500 text-slate-950 font-bold"
-        : "text-slate-400 hover:text-white bg-slate-900 border border-slate-800"
-    }`;
-  });
-
-  const filteredLegs =
-    activeTransitFilter === "all"
-      ? legs
-      : legs.filter((leg) => {
-          if (leg.modes && typeof leg.modes === "object") {
-            return Boolean(leg.modes[activeTransitFilter]);
-          }
-          return (leg.mode || "")
-            .toLowerCase()
-            .includes(activeTransitFilter.toLowerCase());
-        });
-
-  const displayLegs = filteredLegs.length ? filteredLegs : legs;
-
-  const grid = $("transitCardsGrid");
-  grid.replaceChildren();
-  for (const leg of displayLegs) {
-    const isPinned = savedItems.some(
-      (s) =>
-        s.itemType === "transport" &&
-        s.name?.toLowerCase() ===
-          (leg.legTitle || leg.route || "").toLowerCase(),
-    );
-    grid.append(
-      renderTransitCard(leg, {
-        onPin: pinTransit,
-        isPinned,
-        preferredMode: activeTransitFilter,
-      }),
-    );
+  const key = JSON.stringify([current.id, current.trip.origin, current.trip.destination, current.trip.people, planText()]);
+  if (key === transitContext && transitNavigator) {
+    transitNavigator.refreshSaved();
+    return;
   }
-
-  const links = buildTransitLinks(
-    current.trip.origin,
-    current.trip.destination,
-  );
-  const linksRow = $("transitLinksRow");
-  linksRow.replaceChildren();
-  for (const item of links) {
-    linksRow.append(renderTransitLinkButton(item));
-  }
+  transitNavigator?.dispose();
+  transitContext = key;
+  transitNavigator = createJourneyNavigator($("transitCardsGrid"), {
+    suggestions: legacyJourneys(planText(), { origin: current.trip.origin || "", destination: current.trip.destination }),
+    people: current.trip.people || 1,
+    lookup: (query, signal) => request("journey", query, signal),
+    onPin: pinTransit,
+    isPinned: route => savedItems.some(s => s.itemType === "transport" && s.name === `${route.origin} → ${route.destination}`),
+  });
 }
 function renderDining() {
   if (!current?.trip) return;
@@ -982,39 +937,19 @@ async function pinActivity(activity) {
   });
 }
 
-async function pinTransit(leg, selectedModeKey) {
-  const modeKey = selectedModeKey || "grab";
-  const modeData =
-    leg.modes?.[modeKey] ||
-    leg.modes?.local ||
-    leg.modes?.train ||
-    {};
-  const modeName = modeData.modeName || leg.mode || "Transit";
-  const routeName =
-    leg.legTitle ||
-    leg.route ||
-    `${leg.origin || "Origin"} → ${leg.destination || "Destination"}`;
-  const price = modeData.costPHP || leg.estimatedFarePHP || "Check fare";
-  const links = buildTransitLinks(
-    leg.origin || current?.trip?.origin || "",
-    leg.destination || current?.trip?.destination || "",
-  );
-  const link = links[0]?.url || "";
+async function pinTransit(route) {
+  // Persist traveller-authored endpoints and application links only. Provider
+  // facts are short-lived and must be looked up again when the bookmark is used.
+  const name = String(route.origin || "") + " → " + String(route.destination || "");
+  if (savedItems.some(item => item.itemType === "transport" && item.name === name)) {
+    toast("This journey is already in your shortlist.");
+    return;
+  }
+  const links = buildTransitRouteLinks(route);
   await saveItem({
-    itemType: "transport",
-    name: routeName,
-    location: `${leg.origin || ""} → ${leg.destination || ""}`.trim() || routeName,
-    category: modeName,
-    price,
-    link,
-    details: {
-      mode: modeName,
-      duration: modeData.duration || "",
-      paymentMethod: modeData.payment || leg.paymentMethod || "Cash only",
-      signboard: modeData.signboard || "",
-      localTip: modeData.tip || leg.localTip || "",
-      firstStep: modeData.steps?.[0]?.node || "",
-    },
+    itemType: "transport", name, location: name, category: "Transit bookmark",
+    price: "Fare needs confirmation", link: links.find(l => l.id === "maps")?.url || "",
+    details: { origin: route.origin, destination: route.destination, mode: route.mode, costSource: "unknown", localTip: "Saved journey bookmark. Look up current directions and fare before travelling." },
   });
 }
 
@@ -1696,11 +1631,7 @@ for (const button of document.querySelectorAll("[data-stay-filter]"))
     activeStayFilter = button.dataset.stayFilter;
     renderAccommodations();
   });
-for (const button of document.querySelectorAll("[data-transit-filter]"))
-  button.addEventListener("click", () => {
-    activeTransitFilter = button.dataset.transitFilter;
-    renderTransit();
-  });
+
 for (const radio of document.querySelectorAll('input[name="party"]'))
   radio.addEventListener("change", () => {
     if (radio.value === "Solo Traveler") $("people").value = "1";

@@ -1484,3 +1484,48 @@ summary {
   color: #cbd5e1;
   border: 1px solid rgba(148, 163, 184, 0.4);
 }
+
+/* Canonical journey navigator: reuse the existing dark cards and wayfinder. */
+.journey-navigator { min-width: 0; }
+.journey-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: .8rem; }
+.journey-form label { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; color: #cbd5e1; min-width: 0; }
+.journey-form input, .journey-form select { width: 100%; min-width: 0; min-height: 44px; }
+.journey-form [hidden], .journey-mode-panel[hidden] { display: none; }
+.journey-form button { align-self: end; min-height: 44px; }
+.journey-results { display: grid; gap: .8rem; margin-top: 1rem; }
+.journey-overview { display: grid; gap: .5rem; }
+.journey-option { text-align: left; padding: .8rem; border: 1px solid #334155; border-radius: .75rem; background: #0f172a; color: #e2e8f0; font-size: .85rem; min-height: 44px; }
+.journey-option:hover { border-color: #22d3ee; }
+.journey-results .transit-mode-tabs { overflow: visible; flex-wrap: wrap; }
+.journey-results .transit-mode-tab { min-width: 0; min-height: 44px; white-space: normal; }
+.journey-results .transit-mode-tab[aria-selected="true"] { background: #164e63; color: #ecfeff; border-color: #22d3ee; }
+.journey-results .transit-mode-tab:disabled { opacity: .6; cursor: not-allowed; }
+.journey-mode-panel { display: grid; gap: .8rem; }
+.journey-route { gap: .65rem; overflow-wrap: anywhere; }
+.journey-route .transit-card-header { align-items: flex-start; }
+.journey-route .pin-btn { flex-shrink: 0; min-height: 44px; }
+.journey-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
+.journey-time, .journey-fare { font-size: 1rem; font-weight: 700; }
+.journey-fare { color: #6ee7b7; }
+.journey-party { color: #bae6fd; font-size: .85rem; }
+.journey-comparison { padding: .85rem; background: #083344; border-radius: .75rem; color: #cffafe; }
+.journey-directions { border-top: 1px solid #334155; padding-top: .4rem; }
+.journey-directions summary { min-height: 44px; padding: .65rem .15rem; cursor: pointer; color: #67e8f9; font-weight: 700; }
+.journey-route .transit-stepper { list-style: none; padding: .5rem 0; }
+.journey-route .transit-step-row { position: relative; padding-bottom: 1rem; }
+.journey-route .transit-step-row:not(:last-child)::before { content: ''; position: absolute; width: 2px; background: #334155; left: 11px; top: 25px; bottom: 0; }
+.journey-route .transit-step-marker { flex: 0 0 24px; height: 24px; background: #1e293b; color: #e2e8f0; }
+.journey-step-transfer .transit-step-marker { border-radius: 4px; color: #fcd34d; }
+.journey-step-arrive .transit-step-marker { color: #6ee7b7; }
+.journey-step-walk .transit-step-marker { border: 1px dashed #7dd3fc; }
+.journey-step-board .transit-step-marker { background: #164e63; }
+.journey-step-alight .transit-step-marker { border: 1px solid #c4b5fd; }
+.journey-step-type { color: #94a3b8; font-size: .75rem; }
+.journey-route .transit-step-title { font-size: .95rem; }
+.journey-route .transit-step-detail { font-size: .85rem; line-height: 1.5; }
+.journey-attribution { display: flex; flex-wrap: wrap; gap: .5rem; color: #cbd5e1; font-size: .75rem; }
+.google-maps-attribution { color: #fff; white-space: nowrap; font: normal 400 14px sans-serif; letter-spacing: normal; }
+.journey-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.journey-actions a { flex: 1; min-height: 44px; }
+.journey-navigator :focus-visible { outline: 2px solid #22d3ee; outline-offset: 3px; }
+@media (max-width: 480px) { .journey-form { grid-template-columns: 1fr; } .journey-route .transit-card-header { flex-wrap: wrap; } }

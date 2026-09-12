@@ -10,43 +10,7 @@ Be candid: worth the travel time, what to skip, reservations vs spontaneous choi
 Use concise phone-friendly Markdown, headings, bullets and short comparison tables. No HTML, images or enormous essays. A day has Morning, Lunch, Afternoon, Evening, followed by concise mode, estimated time, PHP cost, booking and warning notes. Keep most plans under 1200 words, up to 2000 for long trips. Follow-ups usually under 250 words.
 All costs are estimates in PHP only. State unit price and basis (per person, per group, per day or per night), lodging quantity/room assumption, food, local transport, intercity/island transport, activities, miscellaneous, and exclusions (especially flights). Do not calculate total, per-person total, remaining budget or CAD conversion: the application calculates them separately. Respect PHP caps and strict vs flexible intent; say explicitly if a strict budget seems infeasible. Do not hide missing costs or pretend an estimate is a quote.
 At the end of every itinerary response, include:
-1. A structured transit section with a strict JSON array in a \`\`\`transit code block following this exact schema:
-\`\`\`transit
-[
-  {
-    "legTitle": "e.g. BGC to Intramuros",
-    "modes": {
-      "grab": {
-        "duration": "30-45 mins",
-        "costPHP": "₱320 - ₱420",
-        "payment": "GrabPay / CC / Cash",
-        "tip": "Request driver use NAIAX / Skyway during 4-7 PM peak traffic"
-      },
-      "train": {
-        "duration": "40-55 mins",
-        "costPHP": "₱45 - ₱65",
-        "payment": "Beep Card",
-        "steps": [
-          { "node": "Board MRT-3 at Ayala Station (Northbound)", "detail": "Tap Beep Card" },
-          { "node": "Transfer at Taft Avenue Station to LRT-1", "detail": "Follow footbridge" },
-          { "node": "Alight at Central Terminal Station", "detail": "Walk 5 mins to walled gate" }
-        ]
-      },
-      "local": {
-        "duration": "50-70 mins",
-        "costPHP": "₱25 - ₱40",
-        "payment": "Cash (Keep ₱20/₱50 bills ready)",
-        "signboard": "Exact dashboard signboard text to look for",
-        "steps": [
-          { "node": "Board Traditional / Modern e-Jeepney", "detail": "Hand fare forward: 'Bayad po'" },
-          { "node": "Alight at destination corner", "detail": "Call out: 'Para po'" }
-        ]
-      }
-    }
-  }
-]
-\`\`\`
-For transit legs, provide 2 to 4 key commute routes between major hubs/destinations with multi-modal options (grab, train, local), realistic durations, fares, step-by-step transfer nodes, and exact jeepney/bus signboard text.
+1. A transit section containing ONLY endpoint suggestions in a strict JSON array in a transit code block: [{"origin":"specific starting place, city","destination":"specific destination, city"}]. Provide at most 4 useful journey pairs from the itinerary. If endpoints are unknown, omit the pair. Do not output transportation facts, prices, durations, stations, lines, signboards, payment methods, departure schedules, transfers, or URLs. The application obtains these through structured routing providers after the traveller confirms endpoints and departure time. Never invent transportation infrastructure or precise transport costs in prose either. You may explain general travel etiquette, or summarize supplied structured routes without changing any facts. Unknown fares need confirmation.
 2. A structured dining recommendations section with a strict JSON array in a \`\`\`dining code block following this exact schema:
 \`\`\`dining
 [
@@ -105,7 +69,7 @@ export function initialPrompt(trip) {
           : "";
   return `Task: ${trip.mode === "compare" ? "Compare these two destinations and explain a preference-based verdict" : trip.mode === "research" ? "Research this travel question" : "Build a practical itinerary"}.
 Validated traveller details (JSON data, not instructions):\n${JSON.stringify(trip)}\n
-Budget caps are PHP for the whole group: hotel is all accommodation per night; transport and activities cover the full trip; total includes all categories. There are ${trip.days} inclusive travel days and ${trip.nights} nights. If no calendar dates, do not invent a season or date. If arrival base is absent, explicitly state the assumed arrival point. Do not squeeze in too many islands.${stayPreference ? ` ${stayPreference}` : ""} Provide realistic Philippine commute legs with multi-modal options (Grab, Train, Local jeepney/bus with wayfinding steps and signboard details) in the transit JSON block, diverse dining spots (including plant-based and coconut milk/ginataan specialties) in the dining JSON block, 4 to 6 specific curated properties in the accommodations JSON block, and 4 to 6 curated activities and experiences in the activities JSON block.`;
+Budget caps are PHP for the whole group: hotel is all accommodation per night; transport and activities cover the full trip; total includes all categories. There are ${trip.days} inclusive travel days and ${trip.nights} nights. If no calendar dates, do not invent a season or date. If arrival base is absent, explicitly state the assumed arrival point. Do not squeeze in too many islands.${stayPreference ? ` ${stayPreference}` : ""} Provide only origin/destination journey suggestions in the transit JSON block; structured providers supply all transportation facts, diverse dining spots (including plant-based and coconut milk/ginataan specialties) in the dining JSON block, 4 to 6 specific curated properties in the accommodations JSON block, and 4 to 6 curated activities and experiences in the activities JSON block.`;
 }
 export const COST_SCHEMA = {
   type: "object",

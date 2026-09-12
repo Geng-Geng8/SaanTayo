@@ -30,6 +30,9 @@ for (const needle of [
   "generativelanguage.googleapis.com",
   "x-goog-api-key",
   "GEMINI_API_KEY",
+  "GOOGLE_ROUTES_API_KEY",
+  "routes.googleapis.com",
+  "GRAB_ESTIMATE_CALIBRATIONS",
   "unit-test-only",
   "unit-test-signing-secret",
 ])

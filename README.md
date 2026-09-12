@@ -111,3 +111,6 @@ Google Sheets is the authoritative source of truth for Saved Items. localStorage
 
 * [Application Architecture](docs/architecture.md)
 * [Universal Saved Items + Google Sheets Sync V1](docs/saved-items-v1.md)
+# Transit journey planning
+
+Transit Navigator now uses an optional server-side Google Routes provider, explicit fare provenance, party-size comparisons and conservative legacy handling. See [journey architecture, setup and preview instructions](docs/journey-planner.md). Without `GOOGLE_ROUTES_API_KEY`, routes and fares remain explicitly unavailable. Grab ranges additionally require a reviewed regional calibration; no default tariff is invented.

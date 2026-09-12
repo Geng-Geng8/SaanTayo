@@ -597,72 +597,8 @@
               >PH Multi-Modal Commute</span
             >
           </div>
-          <p class="muted">
-            Interactive route steppers, Grab benchmarks, LRT/MRT connections, and authentic Jeepney dashboard signboards with local fare etiquette.
-          </p>
-
-          <!-- Transit Mode Filter Bar -->
-          <div
-            id="transitFilterBar"
-            role="tablist"
-            aria-label="Transit mode filter"
-            class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800"
-          >
-            <button
-              id="transitFilterAll"
-              type="button"
-              role="tab"
-              data-transit-filter="all"
-              aria-selected="true"
-              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-cyan-500 text-slate-950 font-bold transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>🌐</span> All Modes
-            </button>
-            <button
-              id="transitFilterGrab"
-              type="button"
-              role="tab"
-              data-transit-filter="grab"
-              aria-selected="false"
-              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>🚗</span> Grab / Taxi
-            </button>
-            <button
-              id="transitFilterTrain"
-              type="button"
-              role="tab"
-              data-transit-filter="train"
-              aria-selected="false"
-              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>🚆</span> Train (LRT/MRT)
-            </button>
-            <button
-              id="transitFilterLocal"
-              type="button"
-              role="tab"
-              data-transit-filter="local"
-              aria-selected="false"
-              class="transit-filter-btn px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 transition-all text-center flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span>🛺</span> Jeepney / Local
-            </button>
-          </div>
-
-          <!-- Transit Cards Grid -->
-          <div
-            id="transitCardsGrid"
-            class="grid grid-cols-1 lg:grid-cols-2 gap-3"
-          ></div>
-          <!-- Transit Quick-Link Action Bar -->
-          <div class="pt-2 border-t border-slate-800 space-y-2">
-            <span
-              class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider"
-              >Commute & Booking Quick-Launch</span
-            >
-            <div id="transitLinksRow" class="flex flex-wrap gap-2"></div>
-          </div>
+          <p class="muted">Compare sourced routes, travel time and fares. Confirm your starting point and destination before searching.</p>
+          <div id="transitCardsGrid" class="journey-navigator"></div>
         </section>
 
         <!-- Local Flavors & Dining Guide Section -->
