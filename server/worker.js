@@ -1,6 +1,6 @@
 import { planJourney } from "./routes.js";
 import { groundJourneyAdvice } from "./journey-advisor.js";
-import { searchNearbyPlaces, fetchPlacePhotoMedia } from "./places.js";
+import { searchNearbyPlaces, fetchPlaceDetails, fetchPlacePhotoMedia } from "./places.js";
 import {
   AppError,
   textValue,
@@ -150,7 +150,7 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
       });
       return new Response(media.body, { status: 200, headers: mediaHeaders });
     }
-    if (!["/api/travel", "/api/budget", "/api/journey", "/api/places/nearby"].includes(url.pathname))
+    if (!["/api/travel", "/api/budget", "/api/journey", "/api/places/nearby", "/api/places/details"].includes(url.pathname))
       throw new AppError("NOT_FOUND", "Not found.", 404);
     if (request.method !== "POST")
       throw new AppError("METHOD_NOT_ALLOWED", "Use POST for research.", 405);
@@ -160,6 +160,38 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         "Open SaanTayo to start this request.",
         403,
       );
+    if (url.pathname === "/api/places/details") {
+      const input = await readJson(request);
+      const placeId = textValue(input.placeId, "Place ID", 256);
+      if (!/^[a-zA-Z0-9_-]+$/.test(placeId)) {
+        throw new AppError("INVALID_INPUT", "Invalid place ID format.");
+      }
+
+      if (env.GOOGLE_ROUTES_API_KEY) {
+        if (!env.AI_LIMITER || !env.GLOBAL_LIMITER) {
+          throw new AppError("NOT_CONFIGURED", "Places limits are not configured.", 503);
+        }
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        if (
+          !(await env.AI_LIMITER.limit({ key: ip })).success ||
+          !(await env.GLOBAL_LIMITER.limit({ key: "all" })).success
+        ) {
+          headers["Retry-After"] = "60";
+          throw new AppError("RATE_LIMITED", "Too many requests. Try again in a minute.", 429);
+        }
+      }
+
+      const getDetails = deps.fetchPlaceDetails || fetchPlaceDetails;
+      const result = await getDetails({
+        placeId,
+        key: env.GOOGLE_ROUTES_API_KEY,
+        fetcher: deps.placesFetcher || deps.fetcher,
+        signal: request.signal,
+        providerOverride: deps.placeDetailsProvider,
+      });
+
+      return json(result);
+    }
     if (url.pathname === "/api/places/nearby") {
       const input = await readJson(request);
       const lat = Number(input.latitude);

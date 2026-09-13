@@ -5,18 +5,26 @@
 import { normalizeDiscoveredPlace, haversineDistanceMeters } from "../shared/discovery.js";
 
 const NEARBY_ENDPOINT = "https://places.googleapis.com/v1/places:searchNearby";
-const FIELD_MASK = [
+
+// Places API (New) Nearby Search Pro field mask
+// Does NOT include Enterprise fields (rating, userRatingCount, priceLevel, currentOpeningHours)
+export const PRO_NEARBY_FIELD_MASK = [
   "places.id",
   "places.displayName",
   "places.primaryType",
   "places.types",
   "places.location",
   "places.formattedAddress",
-  "places.rating",
-  "places.userRatingCount",
-  "places.priceLevel",
-  "places.currentOpeningHours.openNow",
   "places.photos",
+].join(",");
+
+// Places API (New) Place Details on-demand field mask for a single selected place
+export const DETAILS_FIELD_MASK = [
+  "id",
+  "rating",
+  "userRatingCount",
+  "priceLevel",
+  "currentOpeningHours.openNow",
 ].join(",");
 
 export const INTENT_TYPES = Object.freeze({
@@ -104,7 +112,7 @@ export async function searchNearbyPlaces({
   const clampedRadius = Math.min(Math.max(Number(radiusMeters) || 2500, 300), 10000);
   const requestBody = {
     includedTypes,
-    maxResultCount: 15,
+    maxResultCount: 10,
     locationRestriction: {
       circle: {
         center: {
@@ -123,7 +131,7 @@ export async function searchNearbyPlaces({
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": FIELD_MASK,
+        "X-Goog-FieldMask": PRO_NEARBY_FIELD_MASK,
       },
       body: JSON.stringify(requestBody),
       signal,
@@ -171,19 +179,18 @@ export async function searchNearbyPlaces({
       }
     }
 
-    // Rank: top ratings and reasonable distance, prioritizing 5-8 strong candidates
+    // Rank: Saved in trip context ranks highest, then closest proximity to traveller
     filtered.sort((a, b) => {
-      // Saved in trip context ranks highest
       if (a.tripContext?.isSaved && !b.tripContext?.isSaved) return -1;
       if (!a.tripContext?.isSaved && b.tripContext?.isSaved) return 1;
 
-      // Then by rating volume and score
-      const scoreA = (a.rating || 3.8) * Math.log10((a.reviewCount || 10) + 1);
-      const scoreB = (b.rating || 3.8) * Math.log10((b.reviewCount || 10) + 1);
-      return scoreB - scoreA;
+      const distA = a.distanceMeters ?? 999999;
+      const distB = b.distanceMeters ?? 999999;
+      return distA - distB;
     });
 
-    const finalPlaces = filtered.slice(0, 8);
+    // Cost-conscious: Target 5 recommendations by default
+    const finalPlaces = filtered.slice(0, 5);
 
     return {
       status: finalPlaces.length ? "ok" : "no_results",
@@ -197,6 +204,67 @@ export async function searchNearbyPlaces({
       places: [],
       warnings: ["Unable to connect to Google Places. Check connection."],
     };
+  }
+}
+
+export async function fetchPlaceDetails({
+  placeId,
+  key,
+  fetcher = fetch,
+  signal,
+  providerOverride = null,
+} = {}) {
+  if (providerOverride) {
+    return providerOverride({ placeId });
+  }
+
+  if (!key) {
+    return { status: "not_configured", warnings: ["Google Places API key is not configured."] };
+  }
+  if (!placeId || typeof placeId !== "string" || !/^[a-zA-Z0-9_-]+$/.test(placeId)) {
+    return { status: "invalid_input", warnings: ["Invalid place ID format."] };
+  }
+
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
+
+  try {
+    const response = await fetcher(url, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": DETAILS_FIELD_MASK,
+      },
+      signal,
+    });
+
+    if (response.status === 403) {
+      const errorJson = await response.json().catch(() => ({}));
+      const reason = errorJson?.error?.details?.[0]?.reason || "SERVICE_DISABLED";
+      return {
+        status: "provider_unavailable",
+        code: reason,
+        warnings: ["Places API is not enabled on this Google Cloud project."],
+      };
+    }
+
+    if (!response.ok) {
+      return { status: "unavailable", warnings: [`Google Places Details returned status ${response.status}.`] };
+    }
+
+    const data = await response.json();
+    return {
+      status: "ok",
+      details: {
+        id: data.id || placeId,
+        rating: typeof data.rating === "number" ? Math.round(data.rating * 10) / 10 : null,
+        reviewCount: typeof data.userRatingCount === "number" ? data.userRatingCount : null,
+        priceLevel: data.priceLevel || null,
+        openNow: typeof data.currentOpeningHours?.openNow === "boolean" ? data.currentOpeningHours.openNow : null,
+      },
+    };
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return { status: "unavailable", warnings: ["Unable to fetch place details."] };
   }
 }
 

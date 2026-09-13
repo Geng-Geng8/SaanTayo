@@ -26,7 +26,13 @@ import {
   renderGoModeResults,
   formatExplanation,
 } from "../src/go-mode.js";
-import { searchNearbyPlaces, fetchPlacePhotoMedia } from "../server/places.js";
+import {
+  searchNearbyPlaces,
+  fetchPlaceDetails,
+  fetchPlacePhotoMedia,
+  PRO_NEARBY_FIELD_MASK,
+  DETAILS_FIELD_MASK,
+} from "../server/places.js";
 import { handleRequest } from "../server/worker.js";
 import {
   shortTripQuery,
@@ -716,4 +722,351 @@ test("Test N: Server API — /api/places/nearby handles coordinates and SERVICE_
   });
   const badPhotoRes = await handleRequest(badPhotoReq, env);
   assert.equal(badPhotoRes.status, 400); // AppError for INVALID_INPUT
+});
+
+// Test O: INITIAL NEARBY SEARCH SKU & PRO FIELD MASK
+test("Test O: Cost-Hardening — Initial Nearby Search field mask is strictly Pro-tier and excludes all Enterprise fields", () => {
+  const proMask = PRO_NEARBY_FIELD_MASK;
+  const enterpriseForbidden = [
+    "rating",
+    "userRatingCount",
+    "priceLevel",
+    "currentOpeningHours",
+    "regularOpeningHours",
+    "reviews",
+    "editorialSummary",
+    "generativeSummary",
+    "nationalPhoneNumber",
+    "internationalPhoneNumber",
+    "websiteUri",
+  ];
+
+  for (const field of enterpriseForbidden) {
+    assert.equal(
+      proMask.includes(field),
+      false,
+      `PRO_NEARBY_FIELD_MASK must NOT contain Enterprise field: ${field}`,
+    );
+  }
+
+  // Must contain only required Pro fields
+  assert.ok(proMask.includes("places.id"));
+  assert.ok(proMask.includes("places.displayName"));
+  assert.ok(proMask.includes("places.primaryType"));
+  assert.ok(proMask.includes("places.types"));
+  assert.ok(proMask.includes("places.location"));
+  assert.ok(proMask.includes("places.formattedAddress"));
+  assert.ok(proMask.includes("places.photos"));
+
+  // On-demand Place Details mask is strictly minimal
+  const detailsMask = DETAILS_FIELD_MASK;
+  assert.ok(detailsMask.includes("id"));
+  assert.ok(detailsMask.includes("rating"));
+  assert.ok(detailsMask.includes("userRatingCount"));
+  assert.ok(detailsMask.includes("priceLevel"));
+  assert.ok(detailsMask.includes("currentOpeningHours.openNow"));
+  assert.equal(detailsMask.includes("reviews"), false);
+  assert.equal(detailsMask.includes("editorialSummary"), false);
+});
+
+// Test P: DISCOVERY UI WITHOUT ENTERPRISE FIELDS
+test("Test P: Discovery UI — Cards render beautifully without Enterprise fields (no empty stars, no dangling separators, factual Why Go)", () => {
+  const { dom, document } = setupDom();
+
+  const proPlace = {
+    id: "place-san-agustin",
+    providerPlaceId: "ChIJSanAgustin",
+    name: "San Agustin Church",
+    primaryType: "historical landmark",
+    categories: ["historical landmark", "tourist attraction"],
+    location: { latitude: 14.5894, longitude: 120.9752 },
+    rating: null,
+    reviewCount: null,
+    priceLevel: null,
+    openNow: null,
+    photoName: null,
+    distanceMeters: 620,
+    reason: "Historic landmark and cultural destination (620 m away).",
+  };
+
+  const card = renderPlaceCard(proPlace, { doc: document });
+
+  // 1. Content exists
+  assert.ok(card.querySelector("h3")?.textContent.includes("San Agustin Church"));
+  assert.ok(card.textContent.includes("historical landmark"));
+  assert.ok(card.textContent.includes("620 m away"));
+  assert.ok(card.textContent.includes("Historic landmark and cultural destination"));
+
+  // 2. No empty star or missing text artifacts
+  assert.equal(card.textContent.includes("★"), false, "Must not display star when rating is null");
+  assert.equal(card.textContent.includes("PRICE_LEVEL"), false);
+  assert.equal(card.textContent.includes("Open now"), false);
+  assert.equal(card.textContent.includes("Closed now"), false);
+
+  // 3. Why Go does not make fake quality claims
+  assert.equal(/highly rated|top-rated/i.test(card.textContent), false, "Must not claim highly rated without rating");
+
+  // 4. Test buildWhyGoReason without rating
+  const reasonMuseum = buildWhyGoReason({ primaryType: "museum" }, 850);
+  assert.match(reasonMuseum, /major cultural attraction less than 1 km/i);
+  assert.equal(/highly rated/i.test(reasonMuseum), false);
+
+  const reasonFilipino = buildWhyGoReason({ primaryType: "filipino restaurant", name: "Inasal Spot" }, 450);
+  assert.match(reasonFilipino, /filipino dining option/i);
+  assert.equal(/highly rated/i.test(reasonFilipino), false);
+
+  dom.window.close();
+});
+
+// Test Q: ON-DEMAND PLACE DETAILS & NON-BLOCKING ROUTING
+test("Test Q: On-Demand Place Details & Non-blocking routing — 0 calls during discovery, exactly 1 call on select, failure does not block routing", async () => {
+  const { dom, document } = setupDom();
+
+  let detailsCalls = 0;
+  let journeyCalls = 0;
+  let detailsShouldFail = false;
+
+  const mockPlaces = [
+    {
+      id: "place-1",
+      providerPlaceId: "ChIJPlace1",
+      name: "Rizal Monument",
+      primaryType: "historical landmark",
+      location: { latitude: 14.5818, longitude: 120.977 },
+      rating: null,
+      reviewCount: null,
+      priceLevel: null,
+      openNow: null,
+      distanceMeters: 200,
+    },
+    {
+      id: "place-2",
+      providerPlaceId: "ChIJPlace2",
+      name: "National Library",
+      primaryType: "library",
+      location: { latitude: 14.5825, longitude: 120.98 },
+      rating: null,
+      reviewCount: null,
+      priceLevel: null,
+      openNow: null,
+      distanceMeters: 400,
+    },
+  ];
+
+  const dialog = document.getElementById("goModeModal");
+  const manager = initGoMode({
+    dialog,
+    form: document.getElementById("goModeForm"),
+    originInput: document.getElementById("goModeOrigin"),
+    destinationInput: document.getElementById("goModeDestination"),
+    quickSelect: document.getElementById("goModeDestinationQuickSelect"),
+    originChipsContainer: document.getElementById("goModeOriginChips"),
+    resultsContainer: document.getElementById("goModeResults"),
+    statusContainer: document.getElementById("goModeStatus"),
+    arrivalBanner: document.getElementById("goModeArrivalBanner"),
+    arrivalText: document.getElementById("goModeArrivalText"),
+    fetchPlaces: async () => ({ status: "ok", places: mockPlaces }),
+    fetchPlaceDetails: async ({ placeId }) => {
+      detailsCalls++;
+      if (detailsShouldFail) {
+        throw new Error("Simulated 503 error fetching place details");
+      }
+      return {
+        status: "ok",
+        details: {
+          id: placeId,
+          rating: 4.8,
+          reviewCount: 9500,
+          priceLevel: "PRICE_LEVEL_FREE",
+          openNow: true,
+        },
+      };
+    },
+    lookupJourney: async () => {
+      journeyCalls++;
+      return {
+        status: "ok",
+        routes: [
+          {
+            id: "walk-1",
+            mode: "walk",
+            source: "google_routes",
+            durationMinutes: 4,
+            distanceMeters: 250,
+            cost: { amountPHP: 0, costSource: "free_walk" },
+          },
+        ],
+        warnings: [],
+      };
+    },
+  });
+
+  manager.open();
+  document.getElementById("goModeOrigin").value = "Rizal Park";
+  // 1. Initial discovery: 0 Place Details calls made
+  await manager.executeDiscovery({ intent: "explore" });
+  assert.equal(detailsCalls, 0, "Initial discovery must NOT call Place Details for any card (no prefetch)");
+
+  // 2. Select place 1: triggers exactly 1 Place Details call and 1 journey call
+  const cards = document.querySelectorAll(".go-mode-place-card");
+  assert.equal(cards.length, 2);
+  const cta1 = cards[0].querySelector(".go-mode-see-options-btn");
+  cta1.click();
+
+  // Allow microtasks to resolve
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(detailsCalls, 1, "Selecting place 1 must trigger exactly 1 Place Details call");
+  assert.equal(journeyCalls, 1, "Journey routing must be triggered immediately");
+
+  // 3. Place Details failure: routing remains completely functional
+  detailsShouldFail = true;
+  cta1.click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(detailsCalls, 2);
+  assert.equal(journeyCalls, 2, "Journey routing must succeed even when Place Details fails");
+
+  dom.window.close();
+});
+
+// Test R: RESULT COUNT & PHOTO CONTROLS
+test("Test R: Result count & Photo controls — searchNearbyPlaces caps recommendations to max 5; photos lazy loaded", async () => {
+  const tenRawPlaces = Array.from({ length: 10 }, (_, i) => ({
+    id: `place-${i}`,
+    displayName: { text: `Spot ${i}` },
+    primaryType: "cafe",
+    types: ["cafe"],
+    location: { latitude: 14.58 + i * 0.001, longitude: 120.97 + i * 0.001 },
+    formattedAddress: `Address ${i}`,
+    photos: [{ name: `places/place-${i}/photos/photo-${i}`, authorAttributions: [{ displayName: `Photographer ${i}` }] }],
+  }));
+
+  const mockFetcher = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ places: tenRawPlaces }),
+  });
+
+  const result = await searchNearbyPlaces({
+    latitude: 14.58,
+    longitude: 120.97,
+    intent: "coffee",
+    key: "mock-key",
+    fetcher: mockFetcher,
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.places.length, 5, "Cost control: Must return at most 5 recommendations");
+
+  // Verify photo lazy loading on rendered card
+  const { dom, document } = setupDom();
+  const card = renderPlaceCard(result.places[0], { doc: document });
+  const img = card.querySelector("img.go-mode-place-photo");
+  assert.ok(img);
+  assert.equal(img.loading, "lazy", "Photo image must have loading='lazy'");
+
+  dom.window.close();
+});
+
+// Test S: RAPID INTENT CHANGES & SUPERSESSION
+test("Test S: Rapid Intent Changes — In-flight requests are aborted and stale responses never overwrite latest user intent", async () => {
+  const { dom, document } = setupDom();
+
+  let activeRequests = 0;
+  const placesHistory = [];
+
+  const dialog = document.getElementById("goModeModal");
+  const manager = initGoMode({
+    dialog,
+    form: document.getElementById("goModeForm"),
+    originInput: document.getElementById("goModeOrigin"),
+    destinationInput: document.getElementById("goModeDestination"),
+    quickSelect: document.getElementById("goModeDestinationQuickSelect"),
+    originChipsContainer: document.getElementById("goModeOriginChips"),
+    resultsContainer: document.getElementById("goModeResults"),
+    statusContainer: document.getElementById("goModeStatus"),
+    arrivalBanner: document.getElementById("goModeArrivalBanner"),
+    arrivalText: document.getElementById("goModeArrivalText"),
+    fetchPlaces: async ({ intent }, signal) => {
+      activeRequests++;
+      const myIntent = intent;
+      // Stagger response so eat takes 50ms, coffee takes 10ms
+      const delay = myIntent === "eat" ? 50 : 10;
+      await new Promise((r) => setTimeout(r, delay));
+      if (signal?.aborted) {
+        throw new Error("Aborted");
+      }
+      return {
+        status: "ok",
+        places: [{ id: `id-${myIntent}`, name: `Result for ${myIntent}`, primaryType: myIntent }],
+      };
+    },
+  });
+
+  manager.open();
+
+  // Rapidly trigger Eat then Coffee
+  const p1 = manager.executeDiscovery({ intent: "eat" });
+  const p2 = manager.executeDiscovery({ intent: "coffee" });
+
+  await Promise.allSettled([p1, p2]);
+
+  // Places container must contain Coffee result, NOT Eat result
+  const container = document.getElementById("goModePlacesContainer");
+  assert.ok(container.textContent.includes("Result for coffee"));
+  assert.equal(container.textContent.includes("Result for eat"), false, "Superseded intent must not overwrite latest intent");
+
+  dom.window.close();
+});
+
+// Test T: SERVER ENDPOINT /api/places/details
+test("Test T: Server API — /api/places/details validates placeId and handles provider errors cleanly", async () => {
+  const env = {
+    GOOGLE_ROUTES_API_KEY: "mock-key",
+    ALLOWED_ORIGINS: "https://saantayo.app",
+    GLOBAL_LIMITER: { limit: async () => ({ success: true }) },
+    AI_LIMITER: { limit: async () => ({ success: true }) },
+  };
+
+  // 1. Success case
+  const detailsReq = new Request("https://saantayo.app/api/places/details", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://saantayo.app",
+    },
+    body: JSON.stringify({ placeId: "ChIJNatlMuseum" }),
+  });
+
+  const mockFetcher = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      id: "ChIJNatlMuseum",
+      rating: 4.7,
+      userRatingCount: 14200,
+      priceLevel: "PRICE_LEVEL_FREE",
+      currentOpeningHours: { openNow: true },
+    }),
+  });
+
+  const res = await handleRequest(detailsReq, env, {}, { placesFetcher: mockFetcher });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.status, "ok");
+  assert.equal(data.details.rating, 4.7);
+  assert.equal(data.details.reviewCount, 14200);
+  assert.equal(data.details.openNow, true);
+
+  // 2. Invalid place ID format
+  const badReq = new Request("https://saantayo.app/api/places/details", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://saantayo.app",
+    },
+    body: JSON.stringify({ placeId: "bad place id with spaces!" }),
+  });
+
+  const badRes = await handleRequest(badReq, env);
+  assert.equal(badRes.status, 400);
 });

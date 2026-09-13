@@ -288,22 +288,27 @@ export function renderPlaceCard(place, { onSelectPlace, doc = null } = {}) {
   const metaRow = el("div", null, "flex items-center gap-1.5 text-[11px] text-slate-400 flex-wrap");
   if (place.rating !== null && place.rating !== undefined) {
     const ratingEl = el("span", `★ ${Number(place.rating).toFixed(1)}${place.reviewCount ? ` (${place.reviewCount.toLocaleString()})` : ""}`, "font-bold text-amber-300");
-    metaRow.append(ratingEl, el("span", "·", "text-slate-600"));
+    metaRow.append(ratingEl);
   }
   if (place.primaryType) {
-    metaRow.append(el("span", place.primaryType, "capitalize text-slate-300"));
+    if (metaRow.children.length > 0) metaRow.append(el("span", "·", "text-slate-600"));
+    metaRow.append(el("span", place.primaryType, "capitalize text-slate-300 font-medium"));
   }
   if (place.distanceMeters !== null && place.distanceMeters !== undefined) {
-    metaRow.append(el("span", "·", "text-slate-600"), el("span", formatDistance(place.distanceMeters), "font-medium text-cyan-300"));
+    if (metaRow.children.length > 0) metaRow.append(el("span", "·", "text-slate-600"));
+    metaRow.append(el("span", formatDistance(place.distanceMeters), "font-medium text-cyan-300"));
   }
   const priceDisplay = formatPriceLevel(place.priceLevel) || (typeof place.priceLevel === "string" && !place.priceLevel.startsWith("PRICE_LEVEL_") ? place.priceLevel : null);
   if (priceDisplay) {
-    metaRow.append(el("span", "·", "text-slate-600"), el("span", priceDisplay, "font-bold text-emerald-400"));
+    if (metaRow.children.length > 0) metaRow.append(el("span", "·", "text-slate-600"));
+    metaRow.append(el("span", priceDisplay, "font-bold text-emerald-400"));
   }
   if (place.openNow === true) {
-    metaRow.append(el("span", "·", "text-slate-600"), el("span", "Open now", "text-[10px] font-bold text-emerald-400"));
+    if (metaRow.children.length > 0) metaRow.append(el("span", "·", "text-slate-600"));
+    metaRow.append(el("span", "Open now", "text-[10px] font-bold text-emerald-400"));
   } else if (place.openNow === false) {
-    metaRow.append(el("span", "·", "text-slate-600"), el("span", "Closed now", "text-[10px] font-bold text-slate-500"));
+    if (metaRow.children.length > 0) metaRow.append(el("span", "·", "text-slate-600"));
+    metaRow.append(el("span", "Closed now", "text-[10px] font-bold text-slate-500"));
   }
   content.append(metaRow);
 
@@ -527,11 +532,13 @@ export function initGoMode({
   getPlanText = () => "",
   lookupJourney = null,
   fetchPlaces = null,
+  fetchPlaceDetails = null,
   toast = () => {},
   storage = typeof localStorage !== "undefined" ? localStorage : null,
 } = {}) {
   let currentController = null;
   let discoveryController = null;
+  let discoverySeq = 0;
   let lastLookupData = null;
   let currentCoords = null;
   let currentIntent = "explore";
@@ -735,6 +742,8 @@ export function initGoMode({
     currentSubPref = subPreference;
     updateActiveIntentButton(intent);
 
+    const seq = ++discoverySeq;
+
     // If offline: Live discovery requires internet
     if (nav && nav.onLine === false) {
       if (statusContainer) {
@@ -786,7 +795,7 @@ export function initGoMode({
           subPreference,
           radiusMeters: 2500,
           tripContext,
-        });
+        }, controller.signal);
       } else {
         const res = await fetch("/api/places/nearby", {
           method: "POST",
@@ -804,7 +813,7 @@ export function initGoMode({
         data = await res.json();
       }
 
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || seq !== discoverySeq) return;
 
       if (data?.status === "provider_unavailable") {
         if (statusContainer) {
@@ -851,7 +860,7 @@ export function initGoMode({
         }
       }
     } catch (err) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || seq !== discoverySeq) return;
       if (statusContainer) {
         statusContainer.textContent = "Unable to load nearby places. Check connection or search below.";
       }
@@ -871,7 +880,28 @@ export function initGoMode({
     if (placesSection) placesSection.classList.add("hidden");
     if (routeView) routeView.classList.remove("hidden");
 
+    // 1. Immediately start route search (never blocked by place details)
     executeRouteSearch();
+
+    // 2. On-demand: Fetch richer Place Details for this ONE selected place
+    const placeId = place.providerPlaceId || place.id;
+    if (placeId && typeof fetchPlaceDetails === "function") {
+      fetchPlaceDetails({ placeId })
+        .then((res) => {
+          if (res?.status === "ok" && res.details) {
+            if (res.details.rating !== null) place.rating = res.details.rating;
+            if (res.details.reviewCount !== null) place.reviewCount = res.details.reviewCount;
+            if (res.details.priceLevel !== null) place.priceLevel = res.details.priceLevel;
+            if (res.details.openNow !== null) place.openNow = res.details.openNow;
+            if (selectedPlaceBadge && place.rating) {
+              selectedPlaceBadge.textContent = `${place.name} (★ ${place.rating.toFixed(1)})`;
+            }
+          }
+        })
+        .catch(() => {
+          // Failure must never block routing
+        });
+    }
   }
 
   // Event wiring

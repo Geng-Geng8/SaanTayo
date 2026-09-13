@@ -82,50 +82,93 @@ export function formatPriceLevel(level) {
 }
 
 export function buildWhyGoReason(place, distanceMeters = null, tripContext = null) {
+  const dist = distanceMeters !== null ? formatDistance(distanceMeters) : "";
+  const category = (place.primaryType || place.categories?.[0] || "spot").toLowerCase();
+
+  // 1. Trip context takes highest priority
   if (tripContext) {
     if (tripContext.isSaved) {
       if (tripContext.savedBy) {
-        return `Saved on your shortlist by ${tripContext.savedBy}.`;
+        return `Saved on your shortlist by ${tripContext.savedBy}${dist ? ` and close to your location (${dist})` : "."}`;
       }
-      return "Saved on your trip shortlist.";
+      return `Saved on your trip shortlist${dist ? ` and close to your current location (${dist})` : "."}`;
     }
     if (tripContext.isItinerary) {
-      return "Matches a stop in your current trip plan.";
+      return `Matches a planned stop on your trip${dist ? ` (${dist})` : "."}`;
     }
     if (tripContext.isNearStay) {
-      return "Conveniently located near your saved accommodation.";
+      return `Conveniently located near your saved accommodation${dist ? ` (${dist})` : "."}`;
     }
   }
 
   const rating = typeof place.rating === "number" ? place.rating : null;
   const count = typeof place.reviewCount === "number" ? place.reviewCount : null;
-  const category = place.primaryType || place.categories?.[0] || "spot";
-  const dist = distanceMeters !== null ? formatDistance(distanceMeters) : "";
 
-  if (rating !== null && rating >= 4.7 && count && count >= 500) {
-    return `Highly rated major ${category} (★ ${rating.toFixed(1)}) with ${count.toLocaleString()} reviews${dist ? ` · ${dist}` : ""}.`;
-  }
-
+  // 2. If enriched details provided verified rating data (e.g. from Place Details)
   if (rating !== null && rating >= 4.5) {
+    if (count && count >= 500) {
+      return `Highly rated major ${category} (★ ${rating.toFixed(1)}) with ${count.toLocaleString()} reviews${dist ? ` · ${dist}` : ""}.`;
+    }
     if (distanceMeters !== null && distanceMeters <= 1000) {
       return `Popular, top-rated ${category} (★ ${rating.toFixed(1)}) an easy walk away (${dist}).`;
     }
-    return `Strongly recommended ${category} (★ ${rating.toFixed(1)})${count ? ` with ${count.toLocaleString()} reviews` : ""}.`;
-  }
-
-  if (distanceMeters !== null && distanceMeters <= 600) {
-    return `Right around the corner (${dist}) for a quick, convenient stop.`;
-  }
-
-  if (place.priceLevel === "PRICE_LEVEL_INEXPENSIVE" || place.priceLevel === 1) {
-    return `Great-value budget-friendly ${category}${rating ? ` (★ ${rating.toFixed(1)})` : ""}.`;
+    return `Strongly recommended ${category} (★ ${rating.toFixed(1)})${dist ? ` · ${dist}` : ""}.`;
   }
 
   if (rating !== null && rating >= 4.0) {
     return `Solid local ${category} (★ ${rating.toFixed(1)})${dist ? ` · ${dist}` : ""}.`;
   }
 
-  return `Worthwhile nearby ${category}${dist ? ` (${dist})` : ""}.`;
+  // 3. Category & intent specific deterministic claims (no unverified quality claims)
+  if (/filipino|inasal|lechon|pinoy/i.test(category) || /filipino/i.test(place.name || "")) {
+    return `Nearby Filipino dining option${dist ? ` (${dist})` : " close to your current location"}.`;
+  }
+
+  if (/museum|art_gallery|gallery/i.test(category)) {
+    if (distanceMeters !== null && distanceMeters <= 1000) {
+      return `Major cultural attraction less than 1 km from your current location (${dist}).`;
+    }
+    return `Cultural museum and exhibition stop in your area${dist ? ` (${dist})` : ""}.`;
+  }
+
+  if (/historical|landmark|monument/i.test(category)) {
+    return `Historic landmark and cultural destination${dist ? ` (${dist})` : " nearby"}.`;
+  }
+
+  if (/park/i.test(category)) {
+    return `Open public park and green space${dist ? ` (${dist})` : " close by"}.`;
+  }
+
+  if (/cafe|coffee/i.test(category)) {
+    return `Local café and coffee spot${dist ? ` an easy walk away (${dist})` : " in your area"}.`;
+  }
+
+  if (/shopping|mall|market|store/i.test(category)) {
+    return `Nearby shopping and retail destination${dist ? ` (${dist})` : ""}.`;
+  }
+
+  if (/bar|night_club|pub/i.test(category)) {
+    return `Nearby evening spot and nightlife venue${dist ? ` (${dist})` : ""}.`;
+  }
+
+  if (/bakery|dessert|ice_cream/i.test(category)) {
+    return `Nearby sweets and bakery stop${dist ? ` (${dist})` : ""}.`;
+  }
+
+  // 4. Proximity-based claims
+  if (distanceMeters !== null && distanceMeters <= 400) {
+    return `Just a short stroll (${dist}) from your current spot.`;
+  }
+
+  if (distanceMeters !== null && distanceMeters <= 1000) {
+    return `Convenient nearby ${category} an easy walk away (${dist}).`;
+  }
+
+  if (distanceMeters !== null && distanceMeters <= 2000) {
+    return `Nearby ${category} less than 2 km from your current area (${dist}).`;
+  }
+
+  return `Accessible nearby ${category}${dist ? ` (${dist})` : ""}.`;
 }
 
 export function normalizeDiscoveredPlace(raw, userCoords = null, tripContextList = []) {
