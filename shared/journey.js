@@ -6,6 +6,7 @@ export const COST_SOURCES = Object.freeze({
   saantayo_estimate: "SaanTayo estimate",
   user_confirmed: "User-confirmed fare",
   free_walk: "Free · no fare",
+  grounded_estimate: "Grounded estimate",
   unknown: "Fare needs confirmation",
 });
 export const MODE_LABELS = Object.freeze({
@@ -13,6 +14,33 @@ export const MODE_LABELS = Object.freeze({
   grab: "🚗 Grab estimate",
   train: "🚊 Train / Transit",
   local: "🚐 Jeepney / Local",
+  tricycle: "🛺 Tricycle",
+});
+export const FARE_PROVENANCE_LEVELS = Object.freeze({
+  LEVEL_1_VERIFIED: {
+    level: 1,
+    id: "verified_provider",
+    label: "✓ Provider fare",
+    badgeClass: "fare-trust-verified",
+  },
+  LEVEL_2_OFFICIAL_BASIS: {
+    level: 2,
+    id: "official_basis",
+    label: "Official fare basis",
+    badgeClass: "fare-trust-official",
+  },
+  LEVEL_3_GROUNDED_ESTIMATE: {
+    level: 3,
+    id: "grounded_estimate",
+    label: "◆ Grounded estimate",
+    badgeClass: "fare-trust-grounded",
+  },
+  LEVEL_4_UNKNOWN: {
+    level: 4,
+    id: "unknown",
+    label: "Fare needs confirmation",
+    badgeClass: "fare-trust-unknown",
+  },
 });
 export const text = (v, max = 240) =>
   typeof v === "string"
@@ -30,6 +58,8 @@ export function normalizeRoute(raw = {}, index = 0) {
     "google_routes",
     "official_operator",
     "user_confirmed",
+    "saantayo_advisor",
+    "grounded_estimate",
   ].includes(raw.source);
   if (!sourced) return null;
   // Reject overlong wayfinders instead of silently dropping the arrival/transfer.
@@ -99,7 +129,7 @@ export function normalizeRoute(raw = {}, index = 0) {
   return {
     id: `route-${index}`,
     mode: raw.mode,
-    modeFamily: raw.mode === "grab" ? "driving" : raw.mode === "walk" ? "walking" : "transit",
+    modeFamily: raw.mode === "grab" ? "driving" : raw.mode === "walk" ? "walking" : raw.mode === "tricycle" ? "local" : "transit",
     label: text(raw.label) || MODE_LABELS[raw.mode],
     origin: text(raw.origin),
     destination: text(raw.destination),
@@ -335,6 +365,39 @@ export function fareLabel(route) {
     ? money(route.totalCostPHP)
     : "Fare needs confirmation";
 }
+export function getFareProvenance(route) {
+  if (!route) return FARE_PROVENANCE_LEVELS.LEVEL_4_UNKNOWN;
+  if (route.mode === "walk") {
+    return {
+      level: 1,
+      id: "free_walk",
+      label: "✓ Free walk",
+      badgeClass: "fare-trust-verified",
+    };
+  }
+  if (
+    route.costProvenance === "verified_provider" ||
+    route.costSource === "google_transit" ||
+    (route.source === "google_routes" && route.totalCostPHP !== null && route.costSource !== "unknown")
+  ) {
+    return FARE_PROVENANCE_LEVELS.LEVEL_1_VERIFIED;
+  }
+  if (
+    route.costProvenance === "official_basis" ||
+    route.costSource === "official_operator"
+  ) {
+    return FARE_PROVENANCE_LEVELS.LEVEL_2_OFFICIAL_BASIS;
+  }
+  if (
+    route.costProvenance === "grounded_estimate" ||
+    route.costSource === "saantayo_estimate" ||
+    route.costSource === "grounded_estimate" ||
+    (route.costRangePHP && route.costSource !== "unknown")
+  ) {
+    return FARE_PROVENANCE_LEVELS.LEVEL_3_GROUNDED_ESTIMATE;
+  }
+  return FARE_PROVENANCE_LEVELS.LEVEL_4_UNKNOWN;
+}
 // Reused from PR #6: application-owned endpoint-aware directions helpers.
 export function buildGoogleMapsDirectionsUrl(
   origin,
@@ -342,6 +405,9 @@ export function buildGoogleMapsDirectionsUrl(
   { mode = "transit" } = {},
 ) {
   if (!text(destination)) return null;
+  if (mode === "tricycle") {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text(destination))}`;
+  }
   const travelmode =
     mode === "grab"
       ? "driving"

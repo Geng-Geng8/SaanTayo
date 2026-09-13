@@ -449,7 +449,7 @@ export function renderJourney(
       for (const p of panels.children) p.hidden = p.dataset.mode !== mode;
     };
     const modeEntries = Object.entries(MODE_LABELS)
-      .filter(([mode]) => mode !== "walk" || model.routes.some((r) => r.mode === "walk"))
+      .filter(([mode]) => (mode !== "walk" && mode !== "tricycle") || model.routes.some((r) => r.mode === mode))
       .sort(([modeA], [modeB]) => {
         const hasA = model.routes.some((r) => r.mode === modeA) ? 1 : 0;
         const hasB = model.routes.some((r) => r.mode === modeB) ? 1 : 0;

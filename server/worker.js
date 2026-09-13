@@ -1,5 +1,6 @@
 import { planJourney } from "./routes.js";
 import { groundJourneyAdvice } from "./journey-advisor.js";
+import { searchNearbyPlaces, fetchPlacePhotoMedia } from "./places.js";
 import {
   AppError,
   textValue,
@@ -101,7 +102,7 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
       if (env.ASSETS) return env.ASSETS.fetch(request);
       return json({ error: { code: "NOT_FOUND", message: "Not found." } }, 404);
     }
-    if (url.search)
+    if (url.search && url.pathname !== "/api/place-photo")
       throw new AppError(
         "INVALID_INPUT",
         "API query parameters are not supported.",
@@ -123,10 +124,33 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         ),
         model: modelConfig(env),
         grounding: groundingEnabled ? "search+maps" : "off",
+        places: env.GOOGLE_ROUTES_API_KEY ? "configured" : "off",
       });
     if (url.pathname === "/api/fx" && request.method === "GET")
       return json(await getRate({ fetcher: deps.fetcher }));
-    if (!["/api/travel", "/api/budget", "/api/journey"].includes(url.pathname))
+    if (url.pathname === "/api/place-photo" && request.method === "GET") {
+      const name = url.searchParams.get("name");
+      if (!name || !/^places\/[a-zA-Z0-9_-]+\/photos\/[a-zA-Z0-9_-]+$/.test(name)) {
+        throw new AppError("INVALID_INPUT", "Invalid photo name.");
+      }
+      const fetchPhoto = deps.fetchPlacePhotoMedia || fetchPlacePhotoMedia;
+      const media = await fetchPhoto({
+        photoName: name,
+        key: env.GOOGLE_ROUTES_API_KEY,
+        fetcher: deps.photoFetcher || deps.fetcher,
+        signal: request.signal,
+      });
+      if (!media || !media.ok) {
+        return json({ error: { code: "NOT_FOUND", message: "Photo not found." } }, 404);
+      }
+      const mediaHeaders = new Headers({
+        "Content-Type": media.headers.get("content-type") || "image/jpeg",
+        "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        "X-Content-Type-Options": "nosniff",
+      });
+      return new Response(media.body, { status: 200, headers: mediaHeaders });
+    }
+    if (!["/api/travel", "/api/budget", "/api/journey", "/api/places/nearby"].includes(url.pathname))
       throw new AppError("NOT_FOUND", "Not found.", 404);
     if (request.method !== "POST")
       throw new AppError("METHOD_NOT_ALLOWED", "Use POST for research.", 405);
@@ -136,6 +160,57 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
         "Open SaanTayo to start this request.",
         403,
       );
+    if (url.pathname === "/api/places/nearby") {
+      const input = await readJson(request);
+      const lat = Number(input.latitude);
+      const lng = Number(input.longitude);
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        throw new AppError("INVALID_INPUT", "Valid coordinates are required.");
+      }
+      const intent = textValue(input.intent || "explore", "Intent", 40);
+      const subPreference = input.subPreference
+        ? textValue(input.subPreference, "Preference", 40)
+        : null;
+      const radius = Math.min(Math.max(Number(input.radius) || 2500, 300), 10000);
+      const tripContext = Array.isArray(input.tripContext) ? input.tripContext : [];
+
+      if (env.GOOGLE_ROUTES_API_KEY) {
+        if (!env.AI_LIMITER || !env.GLOBAL_LIMITER) {
+          throw new AppError("NOT_CONFIGURED", "Places limits are not configured.", 503);
+        }
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        if (
+          !(await env.AI_LIMITER.limit({ key: ip })).success ||
+          !(await env.GLOBAL_LIMITER.limit({ key: "all" })).success
+        ) {
+          headers["Retry-After"] = "60";
+          throw new AppError("RATE_LIMITED", "Too many requests. Try again in a minute.", 429);
+        }
+      }
+
+      const searchPlaces = deps.searchNearbyPlaces || searchNearbyPlaces;
+      const result = await searchPlaces({
+        latitude: lat,
+        longitude: lng,
+        intent,
+        subPreference,
+        radiusMeters: radius,
+        key: env.GOOGLE_ROUTES_API_KEY,
+        fetcher: deps.placesFetcher || deps.fetcher,
+        signal: request.signal,
+        tripContext,
+        providerOverride: deps.placesProvider,
+      });
+
+      return json(result);
+    }
     if (url.pathname === "/api/journey") {
       const input = await readJson(request);
       const from = textValue(input.origin, "Origin", 240);
