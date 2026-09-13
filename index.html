@@ -1082,7 +1082,7 @@
           <span class="text-base text-cyan-400" aria-hidden="true">▶</span>
           <div>
             <h2 id="goModeTitle" class="font-bold text-sm text-cyan-300">Go Mode</h2>
-            <p class="text-[10px] text-slate-400 font-medium">On-the-ground trip execution</p>
+            <p class="text-[10px] text-slate-400 font-medium">Local Travel Concierge · Explore + Eat + Get There</p>
           </div>
         </div>
         <button id="closeGoModeBtn" data-close aria-label="Close Go Mode" class="secondary text-xs">✕</button>
@@ -1093,53 +1093,141 @@
         <span id="goModeArrivalText">You’re at your destination. Where to next?</span>
       </div>
 
-      <form id="goModeForm" class="space-y-3 my-3">
-        <!-- Where are you now? -->
-        <div class="space-y-1.5">
-          <label for="goModeOrigin" class="text-xs font-bold text-slate-200">Where are you now?</label>
-          <input
-            type="text"
-            id="goModeOrigin"
-            required
-            maxlength="240"
-            placeholder="Enter landmark, hotel, station, or street"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          />
-          <div id="goModeOriginChips" class="flex flex-wrap gap-1 pt-1" aria-label="Quick current place choices"></div>
+      <!-- Section: Where are you? -->
+      <div id="goModeLocationSection" class="p-3 my-2 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-200">Where are you?</span>
+          <span id="goModeCurrentLocationLabel" class="text-[11px] text-cyan-400 font-medium truncate max-w-[190px]">Select location below</span>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            id="goModeUseLocationBtn"
+            class="go-mode-location-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-950/30 transition-all cursor-pointer"
+          >
+            <span aria-hidden="true">📍</span>
+            <span>Use my location</span>
+          </button>
+          <div id="goModeOriginChips" class="flex items-center gap-1 flex-wrap" aria-label="Quick current place choices"></div>
+        </div>
+      </div>
+
+      <!-- Section: What do you want to do? -->
+      <div id="goModeIntentSection" class="space-y-2 my-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-200">What do you want to do?</span>
+          <span class="text-[10px] text-slate-400">Discover nearby</span>
+        </div>
+        <div id="goModeIntentGrid" class="grid grid-cols-3 gap-2">
+          <button type="button" data-intent="eat" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">🍜</span>
+            <span>Eat</span>
+          </button>
+          <button type="button" data-intent="explore" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">🏛</span>
+            <span>Explore</span>
+          </button>
+          <button type="button" data-intent="coffee" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">☕</span>
+            <span>Coffee</span>
+          </button>
+          <button type="button" data-intent="shop" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">🛍</span>
+            <span>Shop</span>
+          </button>
+          <button type="button" data-intent="nightlife" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">🌙</span>
+            <span>Nightlife</span>
+          </button>
+          <button type="button" data-intent="surprise" class="go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1">
+            <span class="text-lg">🎯</span>
+            <span>Surprise me</span>
+          </button>
         </div>
 
-        <!-- Where to next? -->
-        <div class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <label for="goModeDestination" class="text-xs font-bold text-slate-200">Where to next?</label>
-            <label for="goModeDestinationQuickSelect" class="sr-only">Choose saved place</label>
-            <select id="goModeDestinationQuickSelect" aria-label="Choose saved destination" class="text-[11px] bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-cyan-300 focus:outline-none focus:border-cyan-500 max-w-[180px] truncate">
-              <option value="">Choose saved place…</option>
-            </select>
+        <!-- Food Preference Chips (hidden unless Eat is selected) -->
+        <div id="goModeFoodChips" class="hidden pt-1">
+          <p class="text-[11px] font-bold text-slate-400 mb-1.5">What sounds good?</p>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Food preferences">
+            <button type="button" data-pref="filipino" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Filipino</button>
+            <button type="button" data-pref="cheap_eats" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Cheap eats</button>
+            <button type="button" data-pref="local" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Something local</button>
+            <button type="button" data-pref="dessert" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Dessert</button>
+            <button type="button" data-pref="coffee" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Coffee</button>
+            <button type="button" data-pref="anything" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Anything good</button>
           </div>
-          <input
-            type="text"
-            id="goModeDestination"
-            required
-            maxlength="240"
-            placeholder="Choose saved place above or type destination"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          />
         </div>
+      </div>
 
-        <!-- Action Button -->
-        <button
-          type="submit"
-          id="goModeFindWayBtn"
-          class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
-        >
-          <span aria-hidden="true">▶</span>
-          <span>Find the smartest way</span>
-        </button>
-      </form>
+      <!-- Discovery Places Container -->
+      <div id="goModePlacesSection" class="space-y-3 my-2">
+        <div id="goModePlacesContainer" class="space-y-3"></div>
+      </div>
+
+      <!-- Route View (Selected Place) Container -->
+      <div id="goModeRouteView" class="hidden space-y-3 my-2">
+        <div class="flex items-center justify-between pb-1">
+          <button type="button" id="goModeBackToPlacesBtn" class="flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer">
+            <span aria-hidden="true">←</span>
+            <span>Back to suggestions</span>
+          </button>
+          <span id="goModeSelectedPlaceBadge" class="text-[11px] font-semibold text-slate-400 truncate max-w-[200px]"></span>
+        </div>
+        <div id="goModeResults" class="space-y-3"></div>
+      </div>
+
+      <!-- Secondary / Manual Search Fallback -->
+      <details id="goModeManualDetails" class="go-mode-manual-details my-3 pt-2 border-t border-slate-800/80">
+        <summary class="text-xs text-slate-400 font-semibold cursor-pointer hover:text-cyan-300 py-1 flex items-center justify-between">
+          <span>Search somewhere else (enter destination manually)</span>
+          <span class="text-slate-500 text-[10px]">▼</span>
+        </summary>
+        <form id="goModeForm" class="space-y-3 my-2 pt-2">
+          <!-- Where are you now? -->
+          <div class="space-y-1">
+            <label for="goModeOrigin" class="text-xs font-bold text-slate-200">Origin / Current location</label>
+            <input
+              type="text"
+              id="goModeOrigin"
+              required
+              maxlength="240"
+              placeholder="Enter landmark, hotel, station, or street"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          <!-- Where to next? -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="goModeDestination" class="text-xs font-bold text-slate-200">Destination</label>
+              <label for="goModeDestinationQuickSelect" class="sr-only">Choose saved place</label>
+              <select id="goModeDestinationQuickSelect" aria-label="Choose saved destination" class="text-[11px] bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-cyan-300 focus:outline-none focus:border-cyan-500 max-w-[180px] truncate">
+                <option value="">Choose saved place…</option>
+              </select>
+            </div>
+            <input
+              type="text"
+              id="goModeDestination"
+              required
+              maxlength="240"
+              placeholder="Choose saved place above or type destination"
+              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          <!-- Action Button -->
+          <button
+            type="submit"
+            id="goModeFindWayBtn"
+            class="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+          >
+            <span aria-hidden="true">▶</span>
+            <span>Find the smartest way</span>
+          </button>
+        </form>
+      </details>
 
       <div id="goModeStatus" role="status" aria-live="polite" class="text-xs text-slate-400 my-2"></div>
-      <div id="goModeResults" class="space-y-3 my-3"></div>
 
       <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
         <span class="text-[10px] text-slate-500">SaanTayo chooses the best way · Google Maps navigates</span>

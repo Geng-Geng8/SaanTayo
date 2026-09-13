@@ -1532,7 +1532,8 @@ summary {
 @media (max-width: 480px) { .journey-form { grid-template-columns: 1fr; } .journey-route .transit-card-header { flex-wrap: wrap; } }
 
 /* ==================================================
-   SAANTAYO V3.2 — GO MODE / ON-THE-GROUND TRIP EXECUTION
+/* ==================================================
+   SAANTAYO V3.3 — EXPLORE + EAT + GET THERE
    ================================================== */
 .go-mode-drawer {
   background: #070d18;
@@ -1573,6 +1574,7 @@ summary {
 .go-mode-chip {
   touch-action: manipulation;
   cursor: pointer;
+  min-height: 28px;
 }
 .go-mode-chip:hover {
   border-color: #06b6d4;
@@ -1586,10 +1588,103 @@ summary {
 .go-mode-secondary-card:hover {
   border-color: #334155;
 }
+.go-mode-intent-btn {
+  min-height: 52px;
+  touch-action: manipulation;
+  cursor: pointer;
+  user-select: none;
+}
+.go-mode-intent-btn:hover {
+  border-color: #06b6d4;
+  color: #e0f2fe;
+  transform: translateY(-1px);
+}
+.go-mode-intent-btn.active {
+  background: linear-gradient(180deg, rgba(6, 182, 212, 0.2), rgba(15, 23, 42, 0.9));
+  border-color: #06b6d4;
+  color: #38bdf8;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25);
+}
+.go-mode-food-chip {
+  min-height: 32px;
+  touch-action: manipulation;
+  cursor: pointer;
+  user-select: none;
+}
+.go-mode-food-chip:hover {
+  border-color: #06b6d4;
+  color: #fff;
+}
+.go-mode-food-chip.active {
+  background: #06b6d4;
+  color: #020617;
+  border-color: #22d3ee;
+  font-weight: 800;
+}
+.go-mode-place-card {
+  background: #0b1322;
+  border: 1px solid #1e293b;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.go-mode-place-card:hover {
+  border-color: #0284c7;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.15);
+}
+.go-mode-place-photo {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: #0f172a;
+}
+.go-mode-place-placeholder {
+  width: 100%;
+  height: 110px;
+  background: linear-gradient(135deg, #091322 0%, #17253b 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.fare-trust-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.fare-trust-verified {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.fare-trust-official {
+  color: #fde047;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+}
+.fare-trust-grounded {
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.15);
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+.fare-trust-unknown {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+.go-mode-manual-details summary::-webkit-details-marker {
+  display: none;
+}
 @media (max-width: 420px) {
   .go-mode-drawer {
     width: calc(100% - 1rem);
     padding: 1rem 0.85rem;
   }
 }
+
 

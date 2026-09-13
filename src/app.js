@@ -1898,6 +1898,8 @@ goModeManager = initGoMode({
   getSavedItems: () => globalSavedItems,
   getPlanText: () => planText(),
   lookupJourney: (query, signal) => request("journey", query, signal),
+  fetchPlaces: (params, signal) => request("places/nearby", params, signal),
+  fetchPlaceDetails: (params, signal) => request("places/details", params, signal),
   toast,
   storage: typeof localStorage !== "undefined" ? localStorage : null,
 });
