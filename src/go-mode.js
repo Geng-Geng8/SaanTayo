@@ -1134,6 +1134,7 @@ export function initDiscoverySection({
   lookupJourney = null,
   toast = () => {},
   onPlanFullTrip = null,
+  intentDebounceMs = 0,
   doc = null,
 } = {}) {
   let discoveryController = null;
@@ -1143,6 +1144,7 @@ export function initDiscoverySection({
   let currentIntent = "gems";
   let currentSubPref = null;
   let selectedPlace = null;
+  let discoveryDebounceTimer = null;
 
   const d = doc || container?.ownerDocument || (typeof document !== "undefined" ? document : null);
   const el = makeEl(d);
@@ -1150,6 +1152,11 @@ export function initDiscoverySection({
   const nav = win?.navigator || (typeof navigator !== "undefined" ? navigator : null);
 
   function cancelDiscovery() {
+    if (discoveryDebounceTimer !== null) {
+      if (win?.clearTimeout) win.clearTimeout(discoveryDebounceTimer);
+      else clearTimeout(discoveryDebounceTimer);
+      discoveryDebounceTimer = null;
+    }
     discoverySeq++;
     discoveryController?.abort();
     discoveryController = null;
@@ -1318,10 +1325,42 @@ export function initDiscoverySection({
     }
   }
 
+  function scheduleDiscovery({ intent = currentIntent, subPreference = currentSubPref } = {}) {
+    currentIntent = intent;
+    currentSubPref = subPreference;
+    updateActiveIntentButton(intent);
+
+    // Keep no-location feedback immediate. Once location is established, a short
+    // debounce collapses rapid category changes into one provider request.
+    if (!currentCoords || !intentDebounceMs || intentDebounceMs <= 0) {
+      return executeDiscovery({ intent, subPreference });
+    }
+
+    cancelDiscovery();
+    const label = intent === "eat"
+      ? "Food"
+      : intent === "shop"
+        ? "Shopping"
+        : intent === "gems"
+          ? "Hidden Gems"
+          : intent.charAt(0).toUpperCase() + intent.slice(1);
+    if (statusContainer) statusContainer.textContent = `${label} selected.`;
+    placesContainer?.replaceChildren();
+
+    const run = () => {
+      discoveryDebounceTimer = null;
+      executeDiscovery({ intent, subPreference });
+    };
+    discoveryDebounceTimer = win?.setTimeout
+      ? win.setTimeout(run, intentDebounceMs)
+      : setTimeout(run, intentDebounceMs);
+    return undefined;
+  }
+
   intentGrid?.addEventListener("click", (e) => {
     const btn = e.target.closest(".discovery-intent-btn, .go-mode-intent-btn");
     if (!btn || !btn.dataset.intent) return;
-    executeDiscovery({ intent: btn.dataset.intent, subPreference: null });
+    scheduleDiscovery({ intent: btn.dataset.intent, subPreference: null });
   });
 
   foodChipsContainer?.addEventListener("click", (e) => {
@@ -1331,7 +1370,7 @@ export function initDiscoverySection({
       c.classList.remove("active");
     }
     chip.classList.add("active");
-    executeDiscovery({ intent: "eat", subPreference: chip.dataset.pref });
+    scheduleDiscovery({ intent: "eat", subPreference: chip.dataset.pref });
   });
 
   // 5. Discovery execution
