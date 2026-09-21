@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { resolvePhilippineLocation, POPULAR_REGIONS } from "../shared/geo.js";
 import { INTENTS } from "../shared/discovery.js";
 import { INTENT_TYPES } from "../server/places.js";
-import { initDiscoverySection } from "../src/go-mode.js";
+import { initDiscoverySection, initGoMode } from "../src/go-mode.js";
 
 const html = await readFile("dist/index.html", "utf8");
 
@@ -399,6 +399,45 @@ test("V3.4 Test 10: Mobile Touch Targets — All category and navigation buttons
 
   const useLocBtn = document.getElementById("discoveryUseLocationBtn");
   assert.ok(useLocBtn.className.includes("min-h-[44px]"), "Use location button must be >= 44px");
+
+  dom.window.close();
+});
+
+test("V3.4 Test 11: Legacy Go Mode modal with requireExplicitLocation prevents silent Manila fallback and triggers 0 Places calls on unknown location", async () => {
+  const { dom, document } = setupDom();
+  let placesCalls = 0;
+
+  const goMode = initGoMode({
+    dialog: document.getElementById("goModeModal"),
+    form: document.getElementById("goModeForm"),
+    originInput: document.getElementById("goModeOrigin"),
+    destinationInput: document.getElementById("goModeDestination"),
+    quickSelect: document.getElementById("goModeDestinationQuickSelect"),
+    originChipsContainer: document.getElementById("goModeOriginChips"),
+    resultsContainer: document.getElementById("goModeResults"),
+    statusContainer: document.getElementById("goModeStatus"),
+    arrivalBanner: document.getElementById("goModeArrivalBanner"),
+    arrivalText: document.getElementById("goModeArrivalText"),
+    requireExplicitLocation: true,
+    fetchPlaces: async () => {
+      placesCalls++;
+      return { status: "ok", places: [] };
+    },
+    doc: document,
+  });
+
+  goMode.open();
+
+  // Click an intent button without establishing location or origin
+  const exploreBtn = document.querySelector("#goModeIntentGrid button[data-intent='explore']");
+  if (exploreBtn) exploreBtn.click();
+
+  // Assert 0 Places calls were made
+  assert.equal(placesCalls, 0, "Must make 0 Places calls when location is unknown");
+
+  // Assert status prompts where user is exploring instead of silently using Manila
+  const status = document.getElementById("goModeStatus")?.textContent;
+  assert.match(status, /Where are you exploring/i);
 
   dom.window.close();
 });

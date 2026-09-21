@@ -1904,6 +1904,7 @@ goModeManager = initGoMode({
   fetchPlaceDetails: (params, signal) => request("places/details", params, signal),
   toast,
   storage: typeof localStorage !== "undefined" ? localStorage : null,
+  requireExplicitLocation: true,
 });
 
 function setEntryMode(newMode) {
