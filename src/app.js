@@ -1986,6 +1986,7 @@ discoveryManager = initDiscoverySection({
   lookupJourney: (query, signal) => request("journey", query, signal),
   toast,
   onPlanFullTrip,
+  intentDebounceMs: 275,
 });
 
 $("entryDecideBtn")?.addEventListener("click", () => setEntryMode("decide"));
