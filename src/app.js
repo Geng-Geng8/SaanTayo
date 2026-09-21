@@ -1,5 +1,5 @@
 import { createJourneyNavigator } from "./transit-render.js";
-import { initGoMode } from "./go-mode.js";
+import { initGoMode, initDiscoverySection } from "./go-mode.js";
 import { legacyJourneys, buildTransitRouteLinks } from "../shared/journey.js";
 import {
   VIBES,
@@ -56,6 +56,8 @@ let mode = "itinerary",
   activeStayFilter = "all",
   transitNavigator = null,
   goModeManager = null,
+  discoveryManager = null,
+  entryMode = "decide",
   transitContext = "",
   activePartnerFilter = "all",
   sharedTrips = [],
@@ -1902,7 +1904,93 @@ goModeManager = initGoMode({
   fetchPlaceDetails: (params, signal) => request("places/details", params, signal),
   toast,
   storage: typeof localStorage !== "undefined" ? localStorage : null,
+  requireExplicitLocation: true,
 });
+
+function setEntryMode(newMode) {
+  entryMode = newMode;
+  const isDecide = entryMode === "decide";
+
+  const decideBtn = $("entryDecideBtn");
+  const knownBtn = $("entryKnownBtn");
+  const discoverySec = $("discoverySection");
+  const plannerTabs = $("plannerModeTabs");
+  const plannerForm = $("planner");
+  const destInput = $("destination");
+
+  if (decideBtn) {
+    decideBtn.setAttribute("aria-selected", String(isDecide));
+    if (isDecide) {
+      decideBtn.classList.add("bg-gradient-to-r", "from-cyan-500", "to-blue-600", "text-slate-950", "font-extrabold");
+      decideBtn.classList.remove("bg-slate-950", "text-slate-300", "border", "border-slate-700");
+    } else {
+      decideBtn.classList.remove("bg-gradient-to-r", "from-cyan-500", "to-blue-600", "text-slate-950", "font-extrabold");
+      decideBtn.classList.add("bg-slate-950", "text-slate-300", "border", "border-slate-700");
+    }
+  }
+
+  if (knownBtn) {
+    knownBtn.setAttribute("aria-selected", String(!isDecide));
+    if (!isDecide) {
+      knownBtn.classList.add("bg-gradient-to-r", "from-cyan-500", "to-blue-600", "text-slate-950", "font-extrabold");
+      knownBtn.classList.remove("bg-slate-950", "text-slate-300", "border", "border-slate-700");
+    } else {
+      knownBtn.classList.remove("bg-gradient-to-r", "from-cyan-500", "to-blue-600", "text-slate-950", "font-extrabold");
+      knownBtn.classList.add("bg-slate-950", "text-slate-300", "border", "border-slate-700");
+    }
+  }
+
+  if (discoverySec) {
+    discoverySec.classList.toggle("hidden", !isDecide);
+  }
+  if (plannerTabs) {
+    plannerTabs.classList.toggle("hidden", isDecide);
+  }
+  if (plannerForm) {
+    plannerForm.classList.toggle("hidden", isDecide);
+  }
+  if (destInput) {
+    destInput.required = !isDecide;
+  }
+}
+
+function onPlanFullTrip(place) {
+  if (!place) return;
+  const destInput = $("destination");
+  if (destInput) {
+    destInput.value = place.name;
+  }
+  setEntryMode("destination");
+  $("planner")?.scrollIntoView({ behavior: "smooth" });
+  toast(`Destination set to "${place.name}". Customize and build your plan!`);
+}
+
+discoveryManager = initDiscoverySection({
+  container: $("discoverySection"),
+  locationInput: $("discoveryLocationInput"),
+  useLocationBtn: $("discoveryUseLocationBtn"),
+  regionChipsContainer: $("discoveryRegionChips"),
+  locationStatus: $("discoveryLocationStatus"),
+  intentGrid: $("discoveryIntentGrid"),
+  foodChipsContainer: $("discoveryFoodChips"),
+  statusContainer: $("discoveryStatus"),
+  placesContainer: $("discoveryPlacesContainer"),
+  routeContainer: $("discoveryRouteContainer"),
+  backToPlacesBtn: $("discoveryBackToPlacesBtn"),
+  planFullTripBtn: $("discoveryPlanFullTripBtn"),
+  routeResults: $("discoveryRouteResults"),
+  getCurrentTrip: () => current,
+  getSavedItems: () => globalSavedItems,
+  fetchPlaces: (params, signal) => request("places/nearby", params, signal),
+  fetchPlaceDetails: (params, signal) => request("places/details", params, signal),
+  lookupJourney: (query, signal) => request("journey", query, signal),
+  toast,
+  onPlanFullTrip,
+});
+
+$("entryDecideBtn")?.addEventListener("click", () => setEntryMode("decide"));
+$("entryKnownBtn")?.addEventListener("click", () => setEntryMode("destination"));
+setEntryMode("decide");
 
 document.querySelectorAll('[data-dialog="goModeModal"]').forEach((btn) => {
   btn.addEventListener("click", () => {

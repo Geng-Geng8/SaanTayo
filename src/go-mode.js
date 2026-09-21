@@ -25,6 +25,7 @@ import {
   formatPriceLevel,
   normalizeDiscoveredPlace,
 } from "../shared/discovery.js";
+import { resolvePhilippineLocation, POPULAR_REGIONS } from "../shared/geo.js";
 
 export const GO_MODE_STORAGE_KEY = "saantayo_go_mode_state_v1";
 export const GRAB_SAFE_URL = "https://www.grab.com/ph/transport/";
@@ -535,6 +536,7 @@ export function initGoMode({
   fetchPlaceDetails = null,
   toast = () => {},
   storage = typeof localStorage !== "undefined" ? localStorage : null,
+  requireExplicitLocation = false,
 } = {}) {
   let currentController = null;
   let discoveryController = null;
@@ -754,18 +756,44 @@ export function initGoMode({
 
     let searchCoords = coords || currentCoords;
     if (!searchCoords) {
-      // Fallback coordinate mapping for common known bases in Philippines
-      const originText = (originInput?.value || "").toLowerCase();
-      const trip = getCurrentTrip();
-      const destText = (trip?.trip?.destination || trip?.destination || "").toLowerCase();
-      const context = `${originText} ${destText}`;
+      const originText = (originInput?.value || "").trim();
+      let matched = resolvePhilippineLocation(originText);
 
-      if (/cebu|it park|mactan|lahug/i.test(context)) {
-        searchCoords = { latitude: 10.3157, longitude: 123.8854 };
-      } else {
-        // Default Manila / Rizal Park area
-        searchCoords = { latitude: 14.5839, longitude: 120.9794 };
+      if (!matched) {
+        const trip = getCurrentTrip();
+        const destText = (trip?.trip?.destination || trip?.destination || "").trim();
+        matched = resolvePhilippineLocation(destText);
       }
+
+      if (!matched) {
+        const saved = getSavedItems();
+        for (const item of saved || []) {
+          if (item.itemType === "stay") {
+            matched = resolvePhilippineLocation(item.name);
+            if (matched) break;
+          }
+        }
+      }
+
+      if (matched) {
+        searchCoords = { latitude: matched.latitude, longitude: matched.longitude };
+      }
+    }
+
+    if (!searchCoords) {
+      if (requireExplicitLocation) {
+        if (statusContainer) {
+          statusContainer.textContent = "Where are you exploring? Choose your location above to see recommendations.";
+        }
+        if (placesContainer) {
+          placesContainer.replaceChildren(
+            el("div", "Please choose where you are exploring to discover nearby spots.", "p-4 text-center text-xs text-slate-400 font-medium"),
+          );
+        }
+        return;
+      }
+      // Backwards compatibility for legacy tests without explicit location
+      searchCoords = { latitude: 14.5839, longitude: 120.9794 };
     }
 
     if (discoveryController) {
@@ -1084,3 +1112,422 @@ export function initGoMode({
     setArrivalState,
   };
 }
+
+export function initDiscoverySection({
+  container,
+  locationInput,
+  useLocationBtn,
+  regionChipsContainer,
+  locationStatus,
+  intentGrid,
+  foodChipsContainer,
+  statusContainer,
+  placesContainer,
+  routeContainer,
+  backToPlacesBtn,
+  planFullTripBtn,
+  routeResults,
+  getCurrentTrip = () => null,
+  getSavedItems = () => [],
+  fetchPlaces = null,
+  fetchPlaceDetails = null,
+  lookupJourney = null,
+  toast = () => {},
+  onPlanFullTrip = null,
+  doc = null,
+} = {}) {
+  let discoveryController = null;
+  let journeyController = null;
+  let discoverySeq = 0;
+  let currentCoords = null;
+  let currentIntent = "gems";
+  let currentSubPref = null;
+  let selectedPlace = null;
+
+  const d = doc || container?.ownerDocument || (typeof document !== "undefined" ? document : null);
+  const el = makeEl(d);
+  const win = d?.defaultView || (typeof window !== "undefined" ? window : null);
+  const nav = win?.navigator || (typeof navigator !== "undefined" ? navigator : null);
+
+  // 1. Populate popular region chips
+  if (regionChipsContainer) {
+    regionChipsContainer.replaceChildren();
+    for (const region of POPULAR_REGIONS) {
+      const chip = el("button", `${region.emoji} ${region.shortLabel}`, "region-chip text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-700 transition-all cursor-pointer shrink-0");
+      chip.type = "button";
+      chip.dataset.regionId = region.id;
+      chip.addEventListener("click", () => {
+        for (const c of regionChipsContainer.querySelectorAll(".region-chip")) {
+          c.classList.remove("active");
+        }
+        chip.classList.add("active");
+        currentCoords = { latitude: region.coords.latitude, longitude: region.coords.longitude };
+        if (locationInput) locationInput.value = region.shortLabel;
+        if (locationStatus) locationStatus.textContent = region.label;
+        if (statusContainer) statusContainer.textContent = `Exploring ${region.label}.`;
+        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords: currentCoords });
+      });
+      regionChipsContainer.append(chip);
+    }
+  }
+
+  // 2. Geolocation handler
+  function requestUserLocation() {
+    if (!nav?.geolocation) {
+      if (statusContainer) {
+        statusContainer.textContent = "Location is not supported by your browser. Choose a region below or enter your area.";
+      }
+      return;
+    }
+    if (statusContainer) {
+      statusContainer.textContent = "Getting current location…";
+    }
+    nav.geolocation.getCurrentPosition(
+      (pos) => {
+        currentCoords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        };
+        if (locationStatus) {
+          locationStatus.textContent = "📍 Current location";
+        }
+        if (locationInput) {
+          locationInput.value = "Current location";
+        }
+        if (regionChipsContainer) {
+          for (const c of regionChipsContainer.querySelectorAll(".region-chip")) {
+            c.classList.remove("active");
+          }
+        }
+        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords: currentCoords });
+      },
+      (err) => {
+        currentCoords = null;
+        if (statusContainer) {
+          statusContainer.textContent = "Location permission not granted. Choose a popular region or enter where you are.";
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  }
+
+  useLocationBtn?.addEventListener("click", () => requestUserLocation());
+
+  // 3. Location input handling
+  function resolveInputLocation() {
+    const val = (locationInput?.value || "").trim();
+    if (!val) return null;
+    const resolved = resolvePhilippineLocation(val);
+    if (resolved) {
+      currentCoords = { latitude: resolved.latitude, longitude: resolved.longitude };
+      if (locationStatus) locationStatus.textContent = resolved.label;
+      return currentCoords;
+    }
+    return null;
+  }
+
+  locationInput?.addEventListener("change", () => {
+    const coords = resolveInputLocation();
+    if (coords) {
+      executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords });
+    } else if (locationInput.value.trim()) {
+      if (statusContainer) {
+        statusContainer.textContent = `Area "${locationInput.value.trim()}" not recognized in directory. Choose a popular region above.`;
+      }
+    }
+  });
+
+  locationInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const coords = resolveInputLocation();
+      if (coords) {
+        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords });
+      }
+    }
+  });
+
+  // 4. Intent selection
+  function updateActiveIntentButton(intent) {
+    if (!intentGrid) return;
+    for (const btn of intentGrid.querySelectorAll(".discovery-intent-btn, .go-mode-intent-btn")) {
+      if (btn.dataset.intent === intent) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    }
+    if (foodChipsContainer) {
+      if (intent === "eat") {
+        foodChipsContainer.classList.remove("hidden");
+      } else {
+        foodChipsContainer.classList.add("hidden");
+      }
+    }
+  }
+
+  intentGrid?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".discovery-intent-btn, .go-mode-intent-btn");
+    if (!btn || !btn.dataset.intent) return;
+    executeDiscovery({ intent: btn.dataset.intent, subPreference: null });
+  });
+
+  foodChipsContainer?.addEventListener("click", (e) => {
+    const chip = e.target.closest(".go-mode-food-chip");
+    if (!chip || !chip.dataset.pref) return;
+    for (const c of foodChipsContainer.querySelectorAll(".go-mode-food-chip")) {
+      c.classList.remove("active");
+    }
+    chip.classList.add("active");
+    executeDiscovery({ intent: "eat", subPreference: chip.dataset.pref });
+  });
+
+  // 5. Discovery execution
+  async function executeDiscovery({ intent = currentIntent, subPreference = currentSubPref, coords = null } = {}) {
+    currentIntent = intent;
+    currentSubPref = subPreference;
+    updateActiveIntentButton(intent);
+
+    const seq = ++discoverySeq;
+
+    if (nav && nav.onLine === false) {
+      if (statusContainer) {
+        statusContainer.textContent = "Nearby suggestions and live routes require internet. Your saved trip places remain accessible.";
+      }
+      return;
+    }
+
+    let searchCoords = coords || currentCoords;
+    if (!searchCoords) {
+      searchCoords = resolveInputLocation();
+    }
+    if (!searchCoords) {
+      const trip = getCurrentTrip();
+      const destText = (trip?.trip?.destination || trip?.destination || "").trim();
+      const matched = resolvePhilippineLocation(destText);
+      if (matched) {
+        searchCoords = { latitude: matched.latitude, longitude: matched.longitude };
+        currentCoords = searchCoords;
+        if (locationStatus) locationStatus.textContent = matched.label;
+        if (locationInput && !locationInput.value) locationInput.value = matched.label;
+      }
+    }
+    if (!searchCoords) {
+      const saved = getSavedItems();
+      for (const item of saved || []) {
+        if (item.itemType === "stay") {
+          const matched = resolvePhilippineLocation(item.name);
+          if (matched) {
+            searchCoords = { latitude: matched.latitude, longitude: matched.longitude };
+            currentCoords = searchCoords;
+            if (locationStatus) locationStatus.textContent = matched.label;
+            if (locationInput && !locationInput.value) locationInput.value = matched.label;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!searchCoords) {
+      if (statusContainer) {
+        statusContainer.textContent = "Where are you exploring? Choose a popular region or tap 'Use my location' above.";
+      }
+      if (placesContainer) {
+        placesContainer.replaceChildren(
+          el("div", "Please choose where you are exploring to discover nearby spots.", "p-4 text-center text-xs text-slate-400 font-medium")
+        );
+      }
+      return;
+    }
+
+    if (discoveryController) {
+      discoveryController.abort();
+    }
+    const controller = new AbortController();
+    discoveryController = controller;
+
+    if (statusContainer) {
+      statusContainer.textContent = `Finding recommendations for ${intent}…`;
+    }
+    if (placesContainer) {
+      placesContainer.replaceChildren(
+        el("div", `Loading ${intent} recommendations…`, "p-4 text-center text-xs text-slate-400")
+      );
+    }
+
+    try {
+      const tripContext = getSavedItems();
+      let data = null;
+
+      if (typeof fetchPlaces === "function") {
+        data = await fetchPlaces({
+          latitude: searchCoords.latitude,
+          longitude: searchCoords.longitude,
+          intent,
+          subPreference,
+          radiusMeters: 3500,
+          tripContext,
+        }, controller.signal);
+      } else {
+        const res = await fetch("/api/places/nearby", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            latitude: searchCoords.latitude,
+            longitude: searchCoords.longitude,
+            intent,
+            subPreference,
+            radius: 3500,
+            tripContext,
+          }),
+          signal: controller.signal,
+        });
+        data = await res.json();
+      }
+
+      if (controller.signal.aborted || seq !== discoverySeq) return;
+
+      if (data?.status === "provider_unavailable") {
+        if (statusContainer) {
+          statusContainer.textContent = data.warnings?.[0] || "Places discovery is currently disabled.";
+        }
+        if (placesContainer) {
+          const warnBox = el("div", null, "p-4 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-2");
+          warnBox.append(
+            el("p", "Google Places API (New) is not enabled on this project.", "text-xs font-bold text-amber-300"),
+            el("p", "You can choose a destination to build a complete plan.", "text-[11px] text-slate-400"),
+          );
+          placesContainer.replaceChildren(warnBox);
+        }
+        return;
+      }
+
+      const places = Array.isArray(data?.places) ? data.places : [];
+      if (!places.length) {
+        if (statusContainer) {
+          statusContainer.textContent = "No nearby places found for this category. Try another vibe.";
+        }
+        if (placesContainer) {
+          placesContainer.replaceChildren(
+            el("div", "No spots found nearby. Try another category or region.", "p-4 text-center text-xs text-slate-400")
+          );
+        }
+        return;
+      }
+
+      if (statusContainer) {
+        statusContainer.textContent = `Showing ${places.length} recommendations. Tap one to see practical transit options.`;
+      }
+
+      if (placesContainer) {
+        placesContainer.replaceChildren();
+        for (const place of places) {
+          const card = renderPlaceCard(place, {
+            doc: d,
+            onSelectPlace: (sel) => selectPlaceAndRoute(sel),
+          });
+          placesContainer.append(card);
+        }
+      }
+    } catch (err) {
+      if (controller.signal.aborted || seq !== discoverySeq) return;
+      if (statusContainer) {
+        statusContainer.textContent = "Unable to load recommendations. Check connection.";
+      }
+    } finally {
+      if (discoveryController === controller) {
+        discoveryController = null;
+      }
+    }
+  }
+
+  // 6. Select place and calculate route
+  async function selectPlaceAndRoute(place) {
+    if (!place) return;
+    selectedPlace = place;
+
+    if (placesContainer) placesContainer.classList.add("hidden");
+    if (routeContainer) routeContainer.classList.remove("hidden");
+
+    if (routeResults) {
+      routeResults.replaceChildren(
+        el("div", `Finding smartest way to ${place.name}…`, "p-4 text-center text-xs text-slate-400")
+      );
+    }
+
+    const origin = (locationInput?.value || locationStatus?.textContent || "Current location").trim();
+    const destination = (place.name || "").trim();
+
+    if (journeyController) journeyController.abort();
+    const controller = new AbortController();
+    journeyController = controller;
+
+    const departureTime = departureISO("now", null);
+    const people = 2;
+
+    // 1. Initiate transit lookup
+    if (typeof lookupJourney === "function") {
+      try {
+        const response = await lookupJourney({ origin, destination, departureTime, people }, controller.signal);
+        if (!controller.signal.aborted && routeResults) {
+          const resultsNode = renderGoModeResults(response?.journey, {
+            people,
+            advisor: response?.advisor,
+            doc: d,
+            onArrived: () => toast(`Arrived at ${place.name}!`),
+          });
+          routeResults.replaceChildren(resultsNode);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted && routeResults) {
+          routeResults.replaceChildren(
+            el("div", "Could not build route between these endpoints.", "p-4 text-center text-xs text-slate-400")
+          );
+        }
+      } finally {
+        if (journeyController === controller) journeyController = null;
+      }
+    }
+
+    // 2. On-demand: Fetch Place Details for this ONE place
+    const placeId = place.providerPlaceId || place.id;
+    if (placeId && typeof fetchPlaceDetails === "function") {
+      fetchPlaceDetails({ placeId }).then((res) => {
+        if (res?.status === "ok" && res.details) {
+          if (res.details.rating !== null) place.rating = res.details.rating;
+          if (res.details.reviewCount !== null) place.reviewCount = res.details.reviewCount;
+          if (res.details.priceLevel !== null) place.priceLevel = res.details.priceLevel;
+          if (res.details.openNow !== null) place.openNow = res.details.openNow;
+        }
+      }).catch(() => {});
+    }
+  }
+
+  // 7. Back button
+  backToPlacesBtn?.addEventListener("click", () => {
+    if (routeContainer) routeContainer.classList.add("hidden");
+    if (placesContainer) placesContainer.classList.remove("hidden");
+    if (statusContainer) statusContainer.textContent = "Returned to suggestions.";
+  });
+
+  // 8. Plan full trip button
+  planFullTripBtn?.addEventListener("click", () => {
+    if (selectedPlace && typeof onPlanFullTrip === "function") {
+      onPlanFullTrip(selectedPlace);
+    }
+  });
+
+  return {
+    executeDiscovery,
+    requestUserLocation,
+    selectPlaceAndRoute,
+    setCoords(coords, label = "") {
+      currentCoords = coords;
+      if (locationStatus && label) locationStatus.textContent = label;
+    },
+    getSelectedPlace() {
+      return selectedPlace;
+    },
+  };
+}
+

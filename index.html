@@ -153,9 +153,172 @@
         App update ready · reload
       </button>
       <div id="storageWarning" class="notice warning hidden" role="alert"></div>
-      <!-- Mode Selector Tabs -->
+
+      <!-- Primary Journey Switcher (V3.4 Discovery-First Entry) -->
+      <section id="entryChoiceSection" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3" aria-label="Starting Choice">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-black tracking-widest text-cyan-400 uppercase">START YOUR JOURNEY</p>
+          <span class="text-[10px] text-slate-400 font-medium">Philippines Trip Intelligence</span>
+        </div>
+        <h2 class="text-base sm:text-lg font-bold text-white tracking-tight leading-snug">
+          What would you like to do?
+        </h2>
+        <div class="grid grid-cols-2 gap-2" role="tablist" aria-label="Journey Paths">
+          <button
+            type="button"
+            id="entryDecideBtn"
+            role="tab"
+            aria-selected="true"
+            aria-controls="discoverySection"
+            class="entry-mode-btn py-3 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px]"
+          >
+            <span aria-hidden="true">✨</span>
+            <span>Help me decide</span>
+          </button>
+          <button
+            type="button"
+            id="entryKnownBtn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="planner"
+            class="entry-mode-btn py-3 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer min-h-[44px]"
+          >
+            <span aria-hidden="true">🎯</span>
+            <span>I know where I'm going</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- In-Page Discovery Section (V3.4 Help Me Decide) -->
+      <section id="discoverySection" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4" aria-label="Local Discovery">
+        <!-- Step 1: Where are you exploring? -->
+        <div id="discoveryLocationBlock" class="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between flex-wrap gap-1">
+            <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <span>📍</span>
+              <span>Where are you exploring?</span>
+            </span>
+            <span id="discoveryLocationStatus" class="text-[11px] text-cyan-400 font-semibold truncate max-w-[200px]">Select location below</span>
+          </div>
+
+          <!-- Quick Location Controls -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              id="discoveryUseLocationBtn"
+              class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-md shadow-cyan-950/30 transition-all cursor-pointer min-h-[44px]"
+            >
+              <span aria-hidden="true">📍</span>
+              <span>Use my location</span>
+            </button>
+            <div class="relative flex-1 min-w-[160px]">
+              <input
+                type="text"
+                id="discoveryLocationInput"
+                aria-label="Exploration area, city, or island"
+                maxlength="120"
+                placeholder="or enter city, island, or area (e.g. Siargao, Makati, Baguio)"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          <!-- Popular Region Quick Chips -->
+          <div class="space-y-1 pt-1">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Popular Destinations</p>
+            <div id="discoveryRegionChips" class="flex items-center gap-1.5 flex-wrap" aria-label="Popular Philippine travel regions"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: What sounds good? (Unified Categories) -->
+        <div id="discoveryIntentBlock" class="space-y-2 pt-1">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-bold text-slate-200 flex items-center gap-1">
+              <span>🧭</span>
+              <span>What sounds good?</span>
+            </p>
+            <span class="text-[10px] text-slate-400">Curated local recommendations</span>
+          </div>
+
+          <div id="discoveryIntentGrid" class="grid grid-cols-3 gap-2">
+            <button type="button" data-intent="gems" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">💎</span>
+              <span>Hidden Gems</span>
+            </button>
+            <button type="button" data-intent="beaches" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🏖️</span>
+              <span>Beaches</span>
+            </button>
+            <button type="button" data-intent="eat" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🍜</span>
+              <span>Food</span>
+            </button>
+            <button type="button" data-intent="culture" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🏛️</span>
+              <span>Culture</span>
+            </button>
+            <button type="button" data-intent="nature" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🌿</span>
+              <span>Nature</span>
+            </button>
+            <button type="button" data-intent="coffee" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">☕</span>
+              <span>Coffee</span>
+            </button>
+            <button type="button" data-intent="nightlife" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🌙</span>
+              <span>Nightlife</span>
+            </button>
+            <button type="button" data-intent="shop" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🛍️</span>
+              <span>Shopping</span>
+            </button>
+            <button type="button" data-intent="surprise" class="discovery-intent-btn go-mode-intent-btn py-2.5 px-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold transition-all text-center flex flex-col items-center gap-1 min-h-[52px]">
+              <span class="text-lg">🎲</span>
+              <span>Surprise Me</span>
+            </button>
+          </div>
+
+          <!-- Food Preference Sub-Chips (shown when Food is active) -->
+          <div id="discoveryFoodChips" class="hidden pt-1.5">
+            <p class="text-[11px] font-bold text-slate-400 mb-1.5">What sounds good?</p>
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none" aria-label="Food preferences">
+              <button type="button" data-pref="filipino" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Filipino</button>
+              <button type="button" data-pref="cheap_eats" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Cheap eats</button>
+              <button type="button" data-pref="local" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Something local</button>
+              <button type="button" data-pref="dessert" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Dessert</button>
+              <button type="button" data-pref="coffee" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Coffee</button>
+              <button type="button" data-pref="anything" class="go-mode-food-chip text-[11px] font-bold px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shrink-0 transition-colors">Anything good</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status & Feedback -->
+        <div id="discoveryStatus" role="status" aria-live="polite" class="text-xs text-slate-400"></div>
+
+        <!-- Suggestions Container (Place Cards) -->
+        <div id="discoveryPlacesContainer" class="space-y-3"></div>
+
+        <!-- Route Comparison Container (when a place is selected) -->
+        <div id="discoveryRouteContainer" class="hidden space-y-3">
+          <div class="flex items-center justify-between pb-1 flex-wrap gap-2">
+            <button type="button" id="discoveryBackToPlacesBtn" class="flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer min-h-[36px]">
+              <span aria-hidden="true">←</span>
+              <span>Back to suggestions</span>
+            </button>
+            <button type="button" id="discoveryPlanFullTripBtn" class="flex items-center gap-1.5 text-xs font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 py-1.5 px-3 rounded-lg shadow-sm transition-all cursor-pointer min-h-[36px]">
+              <span aria-hidden="true">✦</span>
+              <span>Plan full itinerary here</span>
+            </button>
+          </div>
+          <div id="discoveryRouteResults" class="space-y-3"></div>
+        </div>
+      </section>
+
+      <!-- Mode Selector Tabs (Shown when I know where I'm going is active) -->
       <div
-        class="mode-tabs grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800"
+        id="plannerModeTabs"
+        class="mode-tabs grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 hidden"
       >
         <button
           id="modeItineraryBtn"
@@ -186,7 +349,7 @@
       <!-- Input Form Card -->
       <form
         id="planner"
-        class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4"
+        class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 hidden"
       >
         <div class="intro">
           <p class="eyebrow">PHILIPPINES, WITH A PLAN</p>
