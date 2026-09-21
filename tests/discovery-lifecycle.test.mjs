@@ -8,6 +8,7 @@ import { handleRequest } from "../server/worker.js";
 const html = await readFile("index.html", "utf8");
 const origin = "https://saantayo.app";
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const rawPlaces = Array.from({ length: 10 }, (_, i) => ({
   id: `place-${i}`,
   displayName: { text: `Shopping stop ${i}` },
@@ -68,6 +69,7 @@ function setup(t, options = {}) {
     fetchPlaces: options.fallback ? null : options.fetchPlaces || fetchPlaces,
     fetchPlaceDetails: async (query) => { details.push(query); return { status: "ok", details: {} }; },
     lookupJourney: async (query) => { journeys.push(query); return { journey: { routes: [] } }; },
+    intentDebounceMs: options.intentDebounceMs ?? 0,
   });
   const region = (id = "manila") => document.querySelector(`[data-region-id="${id}"]`).click();
   const intent = (id = "shop") => el("IntentGrid").querySelector(`[data-intent="${id}"]`).click();
@@ -204,6 +206,78 @@ for (const status of ["unavailable", "provider_unavailable", "not_configured"]) 
     assert.ok(f.el("PlacesContainer").querySelector("button"));
   });
 }
+
+
+test("Rapid Shopping → Culture intent changes debounce to one final Nearby Search", async (t) => {
+  const f = setup(t, { intentDebounceMs: 40 });
+  f.region();
+  f.intent("shop");
+  f.intent("culture");
+
+  assert.equal(f.requests.length, 0, "No provider request should fire inside the debounce window");
+  assert.doesNotMatch(f.el("PlacesContainer").textContent, /Loading shop|Loading culture/);
+  assert.match(f.el("Status").textContent, /Culture selected/);
+
+  await wait(70);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.googleRequests.length, 1);
+  assert.equal(f.requests[0].intent, "culture");
+});
+
+test("Multiple rapid intent changes collapse to the final category", async (t) => {
+  const f = setup(t, { intentDebounceMs: 40 });
+  f.region();
+  f.intent("shop");
+  f.intent("coffee");
+  f.intent("nature");
+  f.intent("culture");
+
+  await wait(70);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].intent, "culture");
+});
+
+test("A settled intent searches once; a later settled intent searches once more", async (t) => {
+  const f = setup(t, { intentDebounceMs: 40 });
+  f.region();
+  f.intent("shop");
+  await wait(70);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].intent, "shop");
+
+  f.intent("culture");
+  await wait(70);
+  assert.equal(f.requests.length, 2);
+  assert.equal(f.requests[1].intent, "culture");
+});
+
+test("Rapid food preference changes collapse to the final preference", async (t) => {
+  const f = setup(t, { intentDebounceMs: 40 });
+  f.region();
+  f.intent("eat");
+
+  const food = f.el("FoodChips");
+  food.querySelector('[data-pref="filipino"]').click();
+  food.querySelector('[data-pref="cheap_eats"]').click();
+  food.querySelector('[data-pref="dessert"]').click();
+
+  await wait(70);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].intent, "eat");
+  assert.equal(f.requests[0].subPreference, "dessert");
+});
+
+test("Changing location cancels a pending debounced intent before any request is sent", async (t) => {
+  const f = setup(t, { intentDebounceMs: 40 });
+  f.region();
+  f.intent("shop");
+  f.region("cebu");
+
+  await wait(70);
+  assert.equal(f.requests.length, 0);
+  assert.equal(f.googleRequests.length, 0);
+  assert.match(f.el("Status").textContent, /Location set/);
+});
 
 test("Worker prefers radiusMeters, supports cached radius clients, and preserves clamps", async () => {
   for (const [fields, expected] of [
