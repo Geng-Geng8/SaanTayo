@@ -210,7 +210,8 @@ export async function handleRequest(request, env, ctx = {}, deps = {}) {
       const subPreference = input.subPreference
         ? textValue(input.subPreference, "Preference", 40)
         : null;
-      const radius = Math.min(Math.max(Number(input.radius) || 2500, 300), 10000);
+      // radiusMeters is canonical; accept radius for already-cached clients.
+      const radius = Math.min(Math.max(Number(input.radiusMeters ?? input.radius) || 2500, 300), 10000);
       const tripContext = Array.isArray(input.tripContext) ? input.tripContext : [];
 
       if (env.GOOGLE_ROUTES_API_KEY) {

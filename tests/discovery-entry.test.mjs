@@ -138,7 +138,7 @@ test("V3.4 Test 4: Unestablished Location strictly prompts user and blocks Place
   dom.window.close();
 });
 
-test("V3.4 Test 5: Selecting a Popular Region Chip establishes credible location and triggers discovery", async () => {
+test("V3.4 Test 5: Selecting a Popular Region Chip establishes location without discovery", async () => {
   const { dom, document } = setupDom();
   let lastQuery = null;
 
@@ -166,7 +166,10 @@ test("V3.4 Test 5: Selecting a Popular Region Chip establishes credible location
   assert.ok(siargaoChip, "Siargao chip must exist");
   siargaoChip.click();
 
-  assert.ok(lastQuery, "Must trigger discovery after picking region chip");
+  assert.equal(lastQuery, null, "Location selection must not trigger discovery");
+  assert.match(document.getElementById("discoveryStatus").textContent, /Location set/);
+  document.querySelector('#discoveryIntentGrid button[data-intent="shop"]').click();
+  assert.ok(lastQuery, "Explicit intent selection must trigger discovery");
   assert.ok(Math.abs(lastQuery.latitude - 9.7801) < 0.01, "Latitude must match Siargao");
   assert.ok(Math.abs(lastQuery.longitude - 126.1541) < 0.01, "Longitude must match Siargao");
   assert.equal(document.getElementById("discoveryLocationInput").value, "Siargao");

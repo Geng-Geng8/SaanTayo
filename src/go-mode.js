@@ -833,7 +833,7 @@ export function initGoMode({
             longitude: searchCoords.longitude,
             intent,
             subPreference,
-            radius: 2500,
+            radiusMeters: 2500,
             tripContext,
           }),
           signal: controller.signal,
@@ -1149,6 +1149,48 @@ export function initDiscoverySection({
   const win = d?.defaultView || (typeof window !== "undefined" ? window : null);
   const nav = win?.navigator || (typeof navigator !== "undefined" ? navigator : null);
 
+  function cancelDiscovery() {
+    discoverySeq++;
+    discoveryController?.abort();
+    discoveryController = null;
+  }
+
+  function locationEstablished() {
+    cancelDiscovery();
+    selectedPlace = null;
+    currentSubPref = null;
+    updateActiveIntentButton(null);
+    routeContainer?.classList.add("hidden");
+    placesContainer?.classList.remove("hidden");
+    placesContainer?.replaceChildren();
+    if (statusContainer) statusContainer.textContent = "Location set. What sounds good?";
+  }
+
+  function showDiscoveryFailure(message) {
+    if (statusContainer) statusContainer.textContent = message;
+    if (placesContainer) {
+      const card = el("div", null, "p-4 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-2");
+      card.append(el("p", "Choose another category or retry your search.", "text-xs text-slate-400"));
+      const retry = el("button", "Try again", "secondary text-xs min-h-[44px]");
+      retry.type = "button";
+      retry.addEventListener("click", () => executeDiscovery());
+      card.append(retry);
+      placesContainer.replaceChildren(card);
+    }
+  }
+
+  // Only our backend's application errors carry safe traveller-facing messages.
+  function discoveryErrorMessage(err) {
+    if (err?.code === "RATE_LIMITED") {
+      return "Too many searches right now. Wait a moment and try again.";
+    }
+    if (["SERVER_ERROR", "NOT_CONFIGURED", "INVALID_INPUT", "ORIGIN_DENIED", "TOO_LARGE"].includes(err?.code)
+        && typeof err.message === "string" && err.message.trim()) {
+      return err.message;
+    }
+    return "Unable to load recommendations right now. Please try again.";
+  }
+
   // 1. Populate popular region chips
   if (regionChipsContainer) {
     regionChipsContainer.replaceChildren();
@@ -1164,8 +1206,7 @@ export function initDiscoverySection({
         currentCoords = { latitude: region.coords.latitude, longitude: region.coords.longitude };
         if (locationInput) locationInput.value = region.shortLabel;
         if (locationStatus) locationStatus.textContent = region.label;
-        if (statusContainer) statusContainer.textContent = `Exploring ${region.label}.`;
-        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords: currentCoords });
+        locationEstablished();
       });
       regionChipsContainer.append(chip);
     }
@@ -1199,7 +1240,7 @@ export function initDiscoverySection({
             c.classList.remove("active");
           }
         }
-        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords: currentCoords });
+        locationEstablished();
       },
       (err) => {
         currentCoords = null;
@@ -1226,24 +1267,35 @@ export function initDiscoverySection({
     return null;
   }
 
-  locationInput?.addEventListener("change", () => {
+  function confirmInputLocation() {
     const coords = resolveInputLocation();
     if (coords) {
-      executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords });
-    } else if (locationInput.value.trim()) {
+      locationEstablished();
+    } else {
+      currentCoords = null;
+      cancelDiscovery();
+      placesContainer?.replaceChildren();
       if (statusContainer) {
-        statusContainer.textContent = `Area "${locationInput.value.trim()}" not recognized in directory. Choose a popular region above.`;
+        statusContainer.textContent = locationInput.value.trim()
+          ? `Area "${locationInput.value.trim()}" not recognized in directory. Choose a popular region above.`
+          : "Where are you exploring? Choose a location above.";
       }
     }
+  }
+
+  locationInput?.addEventListener("input", () => {
+    currentCoords = null;
+    cancelDiscovery();
+    placesContainer?.replaceChildren();
+    if (locationStatus) locationStatus.textContent = "Select location below";
+    if (statusContainer) statusContainer.textContent = "Confirm your location, then choose a category.";
   });
+  locationInput?.addEventListener("change", confirmInputLocation);
 
   locationInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const coords = resolveInputLocation();
-      if (coords) {
-        executeDiscovery({ intent: currentIntent, subPreference: currentSubPref, coords });
-      }
+      confirmInputLocation();
     }
   });
 
@@ -1291,9 +1343,9 @@ export function initDiscoverySection({
     const seq = ++discoverySeq;
 
     if (nav && nav.onLine === false) {
-      if (statusContainer) {
-        statusContainer.textContent = "Nearby suggestions and live routes require internet. Your saved trip places remain accessible.";
-      }
+      discoveryController?.abort();
+      discoveryController = null;
+      showDiscoveryFailure("Nearby suggestions and live routes require internet. Your saved trip places remain accessible.");
       return;
     }
 
@@ -1377,28 +1429,23 @@ export function initDiscoverySection({
             longitude: searchCoords.longitude,
             intent,
             subPreference,
-            radius: 3500,
+            radiusMeters: 3500,
             tripContext,
           }),
           signal: controller.signal,
         });
         data = await res.json();
+        if (!res.ok) {
+          const err = new Error(data?.error?.message);
+          err.code = data?.error?.code;
+          throw err;
+        }
       }
 
       if (controller.signal.aborted || seq !== discoverySeq) return;
 
-      if (data?.status === "provider_unavailable") {
-        if (statusContainer) {
-          statusContainer.textContent = data.warnings?.[0] || "Places discovery is currently disabled.";
-        }
-        if (placesContainer) {
-          const warnBox = el("div", null, "p-4 rounded-xl bg-slate-950 border border-slate-800 text-center space-y-2");
-          warnBox.append(
-            el("p", "Google Places API (New) is not enabled on this project.", "text-xs font-bold text-amber-300"),
-            el("p", "You can choose a destination to build a complete plan.", "text-[11px] text-slate-400"),
-          );
-          placesContainer.replaceChildren(warnBox);
-        }
+      if (["provider_unavailable", "unavailable", "not_configured"].includes(data?.status)) {
+        showDiscoveryFailure("Nearby recommendations are temporarily unavailable. Please try again later.");
         return;
       }
 
@@ -1431,9 +1478,7 @@ export function initDiscoverySection({
       }
     } catch (err) {
       if (controller.signal.aborted || seq !== discoverySeq) return;
-      if (statusContainer) {
-        statusContainer.textContent = "Unable to load recommendations. Check connection.";
-      }
+      showDiscoveryFailure(discoveryErrorMessage(err));
     } finally {
       if (discoveryController === controller) {
         discoveryController = null;
