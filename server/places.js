@@ -28,7 +28,27 @@ export const DETAILS_FIELD_MASK = [
 ].join(",");
 
 export const INTENT_TYPES = Object.freeze({
+  gems: [
+    "tourist_attraction",
+    "historical_landmark",
+    "cultural_landmark",
+    "art_gallery",
+    "cafe",
+  ],
+  beaches: ["beach", "tourist_attraction"],
   eat: ["restaurant", "cafe", "fast_food_restaurant", "bakery"],
+  culture: [
+    "museum",
+    "art_gallery",
+    "historical_landmark",
+    "cultural_landmark",
+  ],
+  nature: [
+    "park",
+    "national_park",
+    "campground",
+    "hiking_area",
+  ],
   explore: [
     "tourist_attraction",
     "museum",
@@ -183,6 +203,12 @@ export async function searchNearbyPlaces({
     filtered.sort((a, b) => {
       if (a.tripContext?.isSaved && !b.tripContext?.isSaved) return -1;
       if (!a.tripContext?.isSaved && b.tripContext?.isSaved) return 1;
+
+      if (intent === "gems") {
+        const aCrowded = typeof a.reviewCount === "number" && a.reviewCount > 1500 ? 1 : 0;
+        const bCrowded = typeof b.reviewCount === "number" && b.reviewCount > 1500 ? 1 : 0;
+        if (aCrowded !== bCrowded) return aCrowded - bCrowded;
+      }
 
       const distA = a.distanceMeters ?? 999999;
       const distB = b.distanceMeters ?? 999999;

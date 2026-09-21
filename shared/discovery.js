@@ -2,12 +2,16 @@
 // Normalizes nearby places across providers with deterministic, fact-grounded reasons to go.
 
 export const INTENTS = Object.freeze({
-  eat: "🍜 Eat",
-  explore: "🏛 Explore",
+  gems: "💎 Hidden Gems",
+  beaches: "🏖 Beaches",
+  eat: "🍜 Food",
+  culture: "🏛 Culture",
+  nature: "🌿 Nature",
   coffee: "☕ Coffee",
-  shop: "🛍 Shop",
   nightlife: "🌙 Nightlife",
-  surprise: "🎯 Surprise me",
+  shop: "🛍 Shopping",
+  surprise: "🎲 Surprise Me",
+  explore: "🏛 Explore",
 });
 
 export const FOOD_PREFERENCES = Object.freeze([
@@ -133,6 +137,14 @@ export function buildWhyGoReason(place, distanceMeters = null, tripContext = nul
 
   if (/historical|landmark|monument/i.test(category)) {
     return `Historic landmark and cultural destination${dist ? ` (${dist})` : " nearby"}.`;
+  }
+
+  if (/beach|coast|cove/i.test(category) || /beach/i.test(place.name || "")) {
+    return `Coastal beach destination${dist ? ` (${dist})` : " nearby"}.`;
+  }
+
+  if (/campground|hiking|national_park|nature_reserve/i.test(category)) {
+    return `Open-air nature and outdoor destination${dist ? ` (${dist})` : " close by"}.`;
   }
 
   if (/park/i.test(category)) {
